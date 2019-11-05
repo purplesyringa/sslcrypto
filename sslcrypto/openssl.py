@@ -511,7 +511,6 @@ class ECCBackend:
                         ry = BN()
                         if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
                             raise ValueError("Failed to convert R to affine coordinates")
-                        print(rx, ry)
                         r = rx % self.order
                         if r == BN(0):
                             continue

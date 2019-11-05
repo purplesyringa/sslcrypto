@@ -1,5 +1,7 @@
+import hashlib
 import pyaes
 import ecdsa
+import time
 import os
 from ._ecc import ECC
 
@@ -114,7 +116,7 @@ class ECCBackend:
                 (0, 0),  # oid should be here, but it's not required
                 name
             )
-            self.public_key_length = len(bin(n).replace("0b", "")) // 8
+            self.public_key_length = (len(bin(n).replace("0b", "")) + 7) // 8
 
 
         def _int_to_bytes(self, raw):
@@ -169,6 +171,70 @@ class ECCBackend:
             private_key = self._bytes_to_int(private_key)
             point = ecdsa.ellipticcurve.Point(self.curve.curve, x, y, order=self.curve.order)
             return self._int_to_bytes((point * private_key).x())
+
+
+        def sign(self, data, private_key, hash, recoverable):
+            if callable(hash):
+                subject = hash(data)
+            elif hash == "sha256":
+                h = hashlib.sha256()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha512":
+                h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash is None:
+                # *Highly* unrecommended. Only use this if the input is very
+                # small
+                subject = data
+            else:
+                raise ValueError("Unsupported hash function")
+
+            z = self._bytes_to_int(subject[:self.public_key_length])
+
+            raw_private_key = self._bytes_to_int(private_key)
+            sk = ecdsa.SigningKey.from_secret_exponent(raw_private_key, curve=self.curve)
+
+            g = sk.privkey.public_key.generator
+            order = g.order()
+
+            # Generate k deterministically from data
+            h = hashlib.sha512()
+            h.update(data)
+            h.update(b"\x00")
+            h.update(str(time.time()).encode())
+            k = self._bytes_to_int(h.digest()) % order
+
+            while True:
+                # Fix k length to prevent Minerva. Increasing multiplier by a
+                # multiple of order doesn't break anything. This fix was ported
+                # from python-ecdsa
+                ks = k + order
+                kt = ks + order
+                ks_len = len(bin(ks).replace("0b", "")) // 8
+                kt_len = len(bin(kt).replace("0b", "")) // 8
+                if ks_len == kt_len:
+                    p1 = kt * g
+                else:
+                    p1 = ks * g
+                r = p1.x() % order
+                if r == 0:
+                    # Invalid k, try increasing it
+                    k = (k + 1) % order
+                    continue
+
+                s = (ecdsa.numbertheory.inverse_mod(k, order) * (z + (sk.privkey.secret_multiplier * r))) % order
+                if s == 0:
+                    # Invalid k, try increasing it
+                    k = (k + 1) % order
+                    continue
+
+                recid = (p1.y() % 2) ^ (s * 2 >= order)
+                recid += 2 * int(p1.x() // order)
+
+                return bytes([27 + recid]) + self._int_to_bytes(r) + self._int_to_bytes(s)
+
 
 
 
