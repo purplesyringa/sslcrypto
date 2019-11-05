@@ -504,6 +504,13 @@ class ECCBackend:
                     k = BN.link(lib.EC_KEY_get0_private_key(eckey))
                     rp = lib.EC_POINT_new(self.group)
                     try:
+                        # Fix Minerva
+                        k1 = k + self.order
+                        k2 = k1 + self.order
+                        if len(k1) == len(k2):
+                            k = k2
+                        else:
+                            k = k1
                         if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
                             raise ValueError("Could not generate R")
                         # Convert to affine coordinates
