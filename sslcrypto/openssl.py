@@ -122,6 +122,32 @@ class AES:
 
 
 
+class BN:
+    def __init__(self, value=None):
+        if value is None:
+            self.bn = lib.BN_new()
+        elif isinstance(value, bytes):
+            self.bn = lib.BN_bin2bn(value, len(value), None)
+        else:
+            raise ValueError("Cannot create BN from {}".format(type(value)))
+
+
+    def __del__(self):
+        lib.BN_free(self.bn)
+
+
+    def bytes(self, length=None):
+        if length is None:
+            length = (len(self) + 7) // 8
+        buf = ctypes.create_string_buffer(length)
+        lib.BN_bn2bin(self.bn, buf)
+        return bytes(buf)
+
+
+    def __len__(self):
+        return lib.BN_num_bits(self.bn)
+
+
 class ECCBackend:
     NIDS = {
         "secp112r1": 704,
@@ -171,10 +197,9 @@ class ECCBackend:
                 raise ValueError("Curve {} is unsupported by OpenSSL".format(name))
 
             # Get public key length by checking order
-            order_bn = lib.BN_new()
-            lib.EC_GROUP_get_order(self.group, order_bn, None)
-            self.public_key_length = (lib.BN_num_bits(order_bn) + 7) // 8
-            lib.BN_free(order_bn)
+            order = BN()
+            lib.EC_GROUP_get_order(self.group, order.bn, None)
+            self.public_key_length = (len(order) + 7) // 8
 
 
         def __del__(self):
@@ -185,21 +210,20 @@ class ECCBackend:
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             if not eckey:
                 raise ValueError("Failed to allocate EC_KEY")
-            private_key_bn = lib.BN_bin2bn(private_key, len(private_key), None)
-            if not lib.EC_KEY_set_private_key(eckey, private_key_bn):
+            private_key = BN(private_key)
+            if not lib.EC_KEY_set_private_key(eckey, private_key.bn):
                 lib.EC_KEY_free(eckey)
                 raise ValueError("Invalid private key")
-            return eckey, private_key_bn
+            return eckey, private_key
 
 
         def _public_key_to_ec_key(self, public_key):
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             if not eckey:
                 raise ValueError("Failed to allocate EC_KEY")
-            x, y = public_key
-            x_bn = lib.BN_bin2bn(x, len(x), None)
-            y_bn = lib.BN_bin2bn(y, len(y), None)
-            if not lib.EC_KEY_set_public_key_affine_coordinates(eckey, x_bn, y_bn):
+            x = BN(public_key[0])
+            y = BN(public_key[1])
+            if not lib.EC_KEY_set_public_key_affine_coordinates(eckey, x.bn, y.bn):
                 lib.EC_KEY_free(eckey)
                 raise ValueError("Invalid private key")
             return eckey
@@ -207,24 +231,16 @@ class ECCBackend:
 
         def _point_to_affine(self, point):
             # Convert to affine coordinates
-            x_bn = lib.BN_new()
-            y_bn = lib.BN_new()
-            try:
-                if not lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x_bn, y_bn, None):
-                    raise ValueError("Failed to convert public key to affine coordinates")
-                # Convert to binary
-                if (lib.BN_num_bits(x_bn) + 7) // 8 > self.public_key_length:
-                    raise ValueError("Public key X coordinate is too large")
-                if (lib.BN_num_bits(y_bn) + 7) // 8 > self.public_key_length:
-                    raise ValueError("Public key Y coordinate is too large")
-                x = ctypes.create_string_buffer(self.public_key_length)
-                y = ctypes.create_string_buffer(self.public_key_length)
-                lib.BN_bn2bin(x_bn, x)
-                lib.BN_bn2bin(y_bn, y)
-                return bytes(x), bytes(y)
-            finally:
-                lib.BN_free(x_bn)
-                lib.BN_free(y_bn)
+            x = BN()
+            y = BN()
+            if not lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None):
+                raise ValueError("Failed to convert public key to affine coordinates")
+            # Convert to binary
+            if (len(x) + 7) // 8 > self.public_key_length:
+                raise ValueError("Public key X coordinate is too large")
+            if (len(y) + 7) // 8 > self.public_key_length:
+                raise ValueError("Public key Y coordinate is too large")
+            return x.bytes(self.public_key_length), y.bytes(self.public_key_length)
 
 
         def decompress_point(self, public_key):
@@ -244,25 +260,23 @@ class ECCBackend:
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             lib.EC_KEY_generate_key(eckey)
             # To big integer
-            private_key_bn = lib.EC_KEY_get0_private_key(eckey)
+            private_key = BN(lib.EC_KEY_get0_private_key(eckey))
             # To binary
-            private_key = ctypes.create_string_buffer((lib.BN_num_bits(private_key_bn) + 7) // 8)
-            lib.BN_bn2bin(private_key_bn, private_key)
+            private_key_buf = private_key.bytes()
             # Cleanup
             lib.EC_KEY_free(eckey)
-            return bytes(private_key)
+            return private_key_buf
 
 
         def private_to_public(self, private_key):
-            eckey, private_key_bn = self._private_key_to_ec_key(private_key)
+            eckey, private_key = self._private_key_to_ec_key(private_key)
             try:
                 # Derive public key
                 point = lib.EC_POINT_new(self.group)
                 try:
-                    if not lib.EC_POINT_mul(self.group, point, private_key_bn, None, None, None):
+                    if not lib.EC_POINT_mul(self.group, point, private_key.bn, None, None, None):
                         raise ValueError("Failed to derive public key")
-                    x, y = self._point_to_affine(point)
-                    return bytes(x), bytes(y)
+                    return self._point_to_affine(point)
                 finally:
                     lib.EC_POINT_free(point)
             finally:
