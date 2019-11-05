@@ -1,9 +1,9 @@
 import hashlib
 import pyaes
 import ecdsa
-import wcurve
 import time
 import os
+from . import _jacobian as jacobian
 from ._ecc import ECC
 
 __all__ = ["aes", "ecies", "rsa"]
@@ -292,21 +292,18 @@ class ECCBackend:
             rp = ecdsa.ellipticcurve.Point(self.curve.curve, rx, ry, self.curve.order)
 
             # Convert to Jacobian for performance
-            curve_jacobian = wcurve._Curve(
+            jacobian.change_curve(
+                self.curve.curve.p(),
+                self.curve.order,
                 self.curve.curve.a(),
                 self.curve.curve.b(),
-                self.curve.curve.p(),
                 self.curve.generator.x(),
-                self.curve.generator.y(),
-                self.curve.order,
-                # Should be the right cofactor, but it doesn't affect our
-                # calculations
-                0
+                self.curve.generator.y()
             )
-            rp_jacobian = wcurve.JacobianPoint.from_affine(rp.x(), rp.y(), curve_jacobian)
-
-            result = curve_jacobian.base_point * u1 + rp_jacobian * u2
-            x, y = result.to_affine()
+            x, y = jacobian.fast_add(
+                jacobian.fast_multiply(jacobian.G, u1),
+                jacobian.fast_multiply((rp.x(), rp.y()), u2)
+            )
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
