@@ -1,7 +1,6 @@
-import hashlib
 import ctypes
-import hmac
 import os
+from ._ecc import ECC
 
 lib = None
 
@@ -16,7 +15,7 @@ def init():
     lib.OPENSSL_add_all_algorithms_conf()
 
     aes = AES()
-    ecc = ECC()
+    ecc = ECC(ECCBackend())
     rsa = RSA()
 
 
@@ -123,7 +122,7 @@ class AES:
 
 
 
-class ECC:
+class ECCBackend:
     NIDS = {
         "secp112r1": 704,
         "secp112r2": 705,
@@ -159,320 +158,167 @@ class ECC:
     }
 
 
-    def get_curve(self, name):
-        if name not in self.NIDS:
-            raise ValueError("Unknown curve {}".format(name))
-        group = lib.EC_GROUP_new_by_curve_name(self.NIDS[name])
-        if not group:
-            raise ValueError("Curve {} is unsupported by OpenSSL".format(name))
-        return EllipticCurve(self.NIDS[name], group)
+    def is_supported(self, name):
+        return name in self.NIDS
 
 
-class EllipticCurve:
-    def __init__(self, nid, group):
-        self.lib = lib  # For finalizer
-        self.nid = nid
-        self.group = group
+    class EllipticCurveBackend:
+        def __init__(self, name):
+            self.lib = lib  # For finalizer
+            self.nid = ECCBackend.NIDS[name]
+            self.group = lib.EC_GROUP_new_by_curve_name(self.nid)
+            if not self.group:
+                raise ValueError("Curve {} is unsupported by OpenSSL".format(name))
 
-        # Get public key length by checking order
-        order_bn = lib.BN_new()
-        lib.EC_GROUP_get_order(group, order_bn, None)
-        self.public_key_length = (lib.BN_num_bits(order_bn) + 7) // 8
-        lib.BN_free(order_bn)
-
-
-    def __del__(self):
-        self.lib.EC_GROUP_free(self.group)
+            # Get public key length by checking order
+            order_bn = lib.BN_new()
+            lib.EC_GROUP_get_order(self.group, order_bn, None)
+            self.public_key_length = (lib.BN_num_bits(order_bn) + 7) // 8
+            lib.BN_free(order_bn)
 
 
-    def _private_key_to_ec_key(self, private_key):
-        eckey = lib.EC_KEY_new_by_curve_name(self.nid)
-        if not eckey:
-            raise ValueError("Failed to allocate EC_KEY")
-        private_key_bn = lib.BN_bin2bn(private_key, len(private_key), None)
-        if not lib.EC_KEY_set_private_key(eckey, private_key_bn):
-            lib.EC_KEY_free(eckey)
-            raise ValueError("Invalid private key")
-        return eckey, private_key_bn
+        def __del__(self):
+            self.lib.EC_GROUP_free(self.group)
 
 
-    def _public_key_to_ec_key(self, public_key):
-        eckey = lib.EC_KEY_new_by_curve_name(self.nid)
-        if not eckey:
-            raise ValueError("Failed to allocate EC_KEY")
-        x, y = public_key
-        x_bn = lib.BN_bin2bn(x, len(x), None)
-        y_bn = lib.BN_bin2bn(y, len(y), None)
-        if not lib.EC_KEY_set_public_key_affine_coordinates(eckey, x_bn, y_bn):
-            lib.EC_KEY_free(eckey)
-            raise ValueError("Invalid private key")
-        return eckey
+        def _private_key_to_ec_key(self, private_key):
+            eckey = lib.EC_KEY_new_by_curve_name(self.nid)
+            if not eckey:
+                raise ValueError("Failed to allocate EC_KEY")
+            private_key_bn = lib.BN_bin2bn(private_key, len(private_key), None)
+            if not lib.EC_KEY_set_private_key(eckey, private_key_bn):
+                lib.EC_KEY_free(eckey)
+                raise ValueError("Invalid private key")
+            return eckey, private_key_bn
 
 
-    def _encode_public_key(self, x, y):
-        return bytes([0x02 + (y[-1] % 2)]) + x
+        def _public_key_to_ec_key(self, public_key):
+            eckey = lib.EC_KEY_new_by_curve_name(self.nid)
+            if not eckey:
+                raise ValueError("Failed to allocate EC_KEY")
+            x, y = public_key
+            x_bn = lib.BN_bin2bn(x, len(x), None)
+            y_bn = lib.BN_bin2bn(y, len(y), None)
+            if not lib.EC_KEY_set_public_key_affine_coordinates(eckey, x_bn, y_bn):
+                lib.EC_KEY_free(eckey)
+                raise ValueError("Invalid private key")
+            return eckey
 
 
-    def _point_to_affine(self, point):
-        # Convert to affine coordinates
-        x_bn = lib.BN_new()
-        y_bn = lib.BN_new()
-        try:
-            if not lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x_bn, y_bn, None):
-                raise ValueError("Failed to convert public key to affine coordinates")
-            # Convert to binary
-            if (lib.BN_num_bits(x_bn) + 7) // 8 > self.public_key_length:
-                raise ValueError("Public key X coordinate is too large")
-            if (lib.BN_num_bits(y_bn) + 7) // 8 > self.public_key_length:
-                raise ValueError("Public key Y coordinate is too large")
-            x = ctypes.create_string_buffer(self.public_key_length)
-            y = ctypes.create_string_buffer(self.public_key_length)
-            lib.BN_bn2bin(x_bn, x)
-            lib.BN_bn2bin(y_bn, y)
-            return bytes(x), bytes(y)
-        finally:
-            lib.BN_free(x_bn)
-            lib.BN_free(y_bn)
+        def _point_to_affine(self, point):
+            # Convert to affine coordinates
+            x_bn = lib.BN_new()
+            y_bn = lib.BN_new()
+            try:
+                if not lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x_bn, y_bn, None):
+                    raise ValueError("Failed to convert public key to affine coordinates")
+                # Convert to binary
+                if (lib.BN_num_bits(x_bn) + 7) // 8 > self.public_key_length:
+                    raise ValueError("Public key X coordinate is too large")
+                if (lib.BN_num_bits(y_bn) + 7) // 8 > self.public_key_length:
+                    raise ValueError("Public key Y coordinate is too large")
+                x = ctypes.create_string_buffer(self.public_key_length)
+                y = ctypes.create_string_buffer(self.public_key_length)
+                lib.BN_bn2bin(x_bn, x)
+                lib.BN_bn2bin(y_bn, y)
+                return bytes(x), bytes(y)
+            finally:
+                lib.BN_free(x_bn)
+                lib.BN_free(y_bn)
 
 
-    def _decode_public_key(self, public_key, partial=False):
-        if not public_key:
-            raise ValueError("No public key")
-
-        if public_key[0] == 0x04:
-            # Uncompressed. We could technically call OpenSSL here as well but
-            # this would be slower
-            expected_length = 1 + 2 * self.public_key_length
-            if partial:
-                if len(public_key) < expected_length:
-                    raise ValueError("Invalid uncompressed public key length")
-                x = public_key[1:1 + self.public_key_length]
-                y = public_key[1 + self.public_key_length:expected_length]
-                return (x, y), expected_length
-            else:
-                if len(public_key) != expected_length:
-                    raise ValueError("Invalid uncompressed public key length")
-                x = public_key[1:1 + self.public_key_length]
-                y = public_key[1 + self.public_key_length:]
-                return x, y
-        elif public_key[0] in (0x02, 0x03):
-            # Compressed
-            expected_length = 1 + self.public_key_length
-            if partial:
-                if len(public_key) < expected_length:
-                    raise ValueError("Invalid compressed public key length")
-            else:
-                if len(public_key) != expected_length:
-                    raise ValueError("Invalid compressed public key length")
+        def decompress_point(self, public_key):
             point = lib.EC_POINT_new(self.group)
             if not point:
                 raise ValueError("Could not create point")
             try:
-                if not lib.EC_POINT_oct2point(self.group, point, public_key, expected_length, None):
+                if not lib.EC_POINT_oct2point(self.group, point, public_key, len(public_key), None):
                     raise ValueError("Invalid compressed public key")
-                x, y = self._point_to_affine(point)
-                # Sanity check
-                if x != public_key[1:expected_length]:
-                    raise ValueError("Incorrect compressed public key")
-                if partial:
-                    return (x, y), expected_length
-                else:
-                    return x, y
+                return self._point_to_affine(point)
             finally:
                 lib.EC_POINT_free(point)
-        else:
-            raise ValueError("Invalid public key prefix")
 
 
-    def new_private_key(self):
-        # Create random key
-        eckey = lib.EC_KEY_new_by_curve_name(self.nid)
-        lib.EC_KEY_generate_key(eckey)
-        # To big integer
-        private_key_bn = lib.EC_KEY_get0_private_key(eckey)
-        # To binary
-        private_key = ctypes.create_string_buffer((lib.BN_num_bits(private_key_bn) + 7) // 8)
-        lib.BN_bn2bin(private_key_bn, private_key)
-        # Cleanup
-        lib.EC_KEY_free(eckey)
-        return bytes(private_key)
-
-
-    def private_to_public(self, private_key):
-        eckey, private_key_bn = self._private_key_to_ec_key(private_key)
-        try:
-            # Derive public key
-            point = lib.EC_POINT_new(self.group)
-            try:
-                if not lib.EC_POINT_mul(self.group, point, private_key_bn, None, None, None):
-                    raise ValueError("Failed to derive public key")
-                x, y = self._point_to_affine(point)
-                return self._encode_public_key(bytes(x), bytes(y))
-            finally:
-                lib.EC_POINT_free(point)
-        finally:
+        def new_private_key(self):
+            # Create random key
+            eckey = lib.EC_KEY_new_by_curve_name(self.nid)
+            lib.EC_KEY_generate_key(eckey)
+            # To big integer
+            private_key_bn = lib.EC_KEY_get0_private_key(eckey)
+            # To binary
+            private_key = ctypes.create_string_buffer((lib.BN_num_bits(private_key_bn) + 7) // 8)
+            lib.BN_bn2bin(private_key_bn, private_key)
+            # Cleanup
             lib.EC_KEY_free(eckey)
+            return bytes(private_key)
 
 
-    def derive(self, private_key, public_key):
-        if not isinstance(public_key, tuple):
-            public_key = self._decode_public_key(public_key)
-
-        # Private key:
-        # Create EC_KEY
-        eckey, _ = self._private_key_to_ec_key(private_key)
-        try:
-            # Convert to EVP_PKEY
-            pkey = lib.EVP_PKEY_new()
-            if not pkey:
-                raise ValueError("Could not create private key object")
+        def private_to_public(self, private_key):
+            eckey, private_key_bn = self._private_key_to_ec_key(private_key)
             try:
-                lib.EVP_PKEY_set1_EC_KEY(pkey, eckey)
-
-                # Public key:
-                # Create EC_KEY
-                peer_eckey = self._public_key_to_ec_key(public_key)
+                # Derive public key
+                point = lib.EC_POINT_new(self.group)
                 try:
-                    # Convert to EVP_PKEY
-                    peer_pkey = lib.EVP_PKEY_new()
-                    if not peer_pkey:
-                        raise ValueError("Could not create public key object")
-                    try:
-                        lib.EVP_PKEY_set1_EC_KEY(peer_pkey, peer_eckey)
-
-                        # Create context
-                        ctx = lib.EVP_PKEY_CTX_new(pkey, None)
-                        if not ctx:
-                            raise ValueError("Could not create EVP context")
-                        try:
-                            if lib.EVP_PKEY_derive_init(ctx) != 1:
-                                raise ValueError("Could not initialize key derivation")
-                            if not lib.EVP_PKEY_derive_set_peer(ctx, peer_pkey):
-                                raise ValueError("Could not set peer")
-
-                            # Actually derive
-                            key_len = ctypes.c_int(0)
-                            lib.EVP_PKEY_derive(ctx, None, ctypes.byref(key_len))
-                            key = ctypes.create_string_buffer(key_len.value)
-                            lib.EVP_PKEY_derive(ctx, key, ctypes.byref(key_len))
-
-                            return bytes(key)
-                        finally:
-                            lib.EVP_PKEY_CTX_free(ctx)
-                    finally:
-                        lib.EVP_PKEY_free(peer_pkey)
+                    if not lib.EC_POINT_mul(self.group, point, private_key_bn, None, None, None):
+                        raise ValueError("Failed to derive public key")
+                    x, y = self._point_to_affine(point)
+                    return bytes(x), bytes(y)
                 finally:
-                    lib.EC_KEY_free(peer_eckey)
+                    lib.EC_POINT_free(point)
             finally:
-                lib.EVP_PKEY_free(pkey)
-        finally:
-            lib.EC_KEY_free(eckey)
+                lib.EC_KEY_free(eckey)
 
 
-    # High-level functions
-    def encrypt(self, data, public_key, algo="aes-256-cbc", derivation="sha256", mac="hmac-sha256"):
-        # Generate ephemeral private key
-        private_key = self.new_private_key()
+        def ecdh(self, private_key, public_key):
+            # Private key:
+            # Create EC_KEY
+            eckey, _ = self._private_key_to_ec_key(private_key)
+            try:
+                # Convert to EVP_PKEY
+                pkey = lib.EVP_PKEY_new()
+                if not pkey:
+                    raise ValueError("Could not create private key object")
+                try:
+                    lib.EVP_PKEY_set1_EC_KEY(pkey, eckey)
 
-        # Derive key
-        ecdh = self.derive(private_key, public_key)
-        if callable(derivation):
-            key = derivation(ecdh)
-        elif derivation == "sha256":  # Most commonly used
-            hash = hashlib.sha256()
-            hash.update(ecdh)
-            key = hash.digest()
-        elif derivation == "sha512":  # Sometimes used as well
-            hash = hashlib.sha512()
-            hash.update(ecdh)
-            key = hash.digest()
-        else:
-            raise ValueError("Unsupported key derivation method")
-        k_enc, k_mac = key[:32], key[32:]
+                    # Public key:
+                    # Create EC_KEY
+                    peer_eckey = self._public_key_to_ec_key(public_key)
+                    try:
+                        # Convert to EVP_PKEY
+                        peer_pkey = lib.EVP_PKEY_new()
+                        if not peer_pkey:
+                            raise ValueError("Could not create public key object")
+                        try:
+                            lib.EVP_PKEY_set1_EC_KEY(peer_pkey, peer_eckey)
 
-        # Encrypt
-        ciphertext, iv = aes.encrypt(data, k_enc, algo=algo)
-        ciphertext = iv + self.private_to_public(private_key) + ciphertext
+                            # Create context
+                            ctx = lib.EVP_PKEY_CTX_new(pkey, None)
+                            if not ctx:
+                                raise ValueError("Could not create EVP context")
+                            try:
+                                if lib.EVP_PKEY_derive_init(ctx) != 1:
+                                    raise ValueError("Could not initialize key derivation")
+                                if not lib.EVP_PKEY_derive_set_peer(ctx, peer_pkey):
+                                    raise ValueError("Could not set peer")
 
-        # Add MAC tag
-        if callable(mac):
-            tag = mac(k_mac, ciphertext)
-        elif mac == "hmac-sha256":
-            h = hmac.new(k_mac, digestmod="sha256")
-            h.update(ciphertext)
-            tag = h.digest()
-        elif mac == "hmac-sha512":
-            h = hmac.new(k_mac, digestmod="sha512")
-            h.update(ciphertext)
-            tag = h.digest()
-        elif mac is False:
-            tag = b""
-        else:
-            raise ValueError("Unsupported MAC")
+                                # Actually derive
+                                key_len = ctypes.c_int(0)
+                                lib.EVP_PKEY_derive(ctx, None, ctypes.byref(key_len))
+                                key = ctypes.create_string_buffer(key_len.value)
+                                lib.EVP_PKEY_derive(ctx, key, ctypes.byref(key_len))
 
-        return ciphertext + tag
-
-
-    def decrypt(self, ciphertext, private_key, algo="aes-256-cbc", derivation="sha256", mac="hmac-sha256"):
-        # Get MAC tag
-        if callable(mac):
-            tag_length = mac.digest_size
-        elif mac == "hmac-sha256":
-            tag_length = hmac.new(b"", digestmod="sha256").digest_size
-        elif mac == "hmac-sha512":
-            tag_length = hmac.new(b"", digestmod="sha512").digest_size
-        elif mac is False:
-            tag_length = 0
-        else:
-            raise ValueError("Unsupported MAC")
-
-        if len(ciphertext) < tag_length:
-            raise ValueError("Ciphertext is too small to contain MAC tag")
-        ciphertext, tag = ciphertext[:-tag_length], ciphertext[-tag_length:]
-
-        orig_ciphertext = ciphertext
-
-        if len(ciphertext) < 16:
-            raise ValueError("Ciphertext is too small to contain IV")
-        iv, ciphertext = ciphertext[:16], ciphertext[16:]
-
-        public_key, pos = self._decode_public_key(ciphertext, partial=True)
-        ciphertext = ciphertext[pos:]
-
-        # Derive key
-        ecdh = self.derive(private_key, public_key)
-        if callable(derivation):
-            key = derivation(ecdh)
-        elif derivation == "sha256":  # Most commonly used
-            hash = hashlib.sha256()
-            hash.update(ecdh)
-            key = hash.digest()
-        elif derivation == "sha512":  # Sometimes used as well
-            hash = hashlib.sha512()
-            hash.update(ecdh)
-            key = hash.digest()
-        else:
-            raise ValueError("Unsupported key derivation method")
-        k_enc, k_mac = key[:32], key[32:]
-
-        # Verify MAC tag
-        if callable(mac):
-            expected_tag = mac(k_mac, orig_ciphertext)
-        elif mac == "hmac-sha256":
-            h = hmac.new(k_mac, digestmod="sha256")
-            h.update(orig_ciphertext)
-            expected_tag = h.digest()
-        elif mac == "hmac-sha512":
-            h = hmac.new(k_mac, digestmod="sha512")
-            h.update(orig_ciphertext)
-            expected_tag = h.digest()
-        elif mac is False:
-            expected_tag = b""
-
-        if not hmac.compare_digest(tag, expected_tag):
-            raise ValueError("Invalid MAC tag")
-
-        return aes.decrypt(ciphertext, iv, k_enc)
+                                return bytes(key)
+                            finally:
+                                lib.EVP_PKEY_CTX_free(ctx)
+                        finally:
+                            lib.EVP_PKEY_free(peer_pkey)
+                    finally:
+                        lib.EC_KEY_free(peer_eckey)
+                finally:
+                    lib.EVP_PKEY_free(pkey)
+            finally:
+                lib.EC_KEY_free(eckey)
 
 
 class RSA:
