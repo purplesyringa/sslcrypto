@@ -533,7 +533,7 @@ class ECCBackend:
                             # The line below is highly unlikely to matter in case of
                             # secp256k1 but might make sense for other curves
                             recid += 2 * int(rx // self.order)
-                            return bytes([27 + recid]) + r_buf + s_buf
+                            return bytes([31 + recid]) + r_buf + s_buf
                         else:
                             return r_buf + s_buf
                     finally:
@@ -560,7 +560,7 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            recid = signature[0] - 27
+            recid = signature[0] - 31
             r = BN(signature[1:self.public_key_length + 1])
             s = BN(signature[self.public_key_length + 1:])
 

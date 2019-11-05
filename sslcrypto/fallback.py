@@ -1,6 +1,7 @@
 import hashlib
 import pyaes
 import ecdsa
+import wcurve
 import time
 import os
 from ._ecc import ECC
@@ -233,9 +234,80 @@ class ECCBackend:
                 recid = (p1.y() % 2) ^ (s * 2 >= order)
                 recid += 2 * int(p1.x() // order)
 
-                return bytes([27 + recid]) + self._int_to_bytes(r) + self._int_to_bytes(s)
+                return bytes([31 + recid]) + self._int_to_bytes(r) + self._int_to_bytes(s)
 
 
+        def recover(self, signature, data, hash):
+            if callable(hash):
+                subject = hash(data)
+            elif hash == "sha256":
+                h = hashlib.sha256()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha512":
+                h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash is None:
+                # *Highly* unrecommended. Only use this if the input is very
+                # small
+                subject = data
+            else:
+                raise ValueError("Unsupported hash function")
+
+            recid = signature[0] - 31
+            r = self._bytes_to_int(signature[1:self.public_key_length + 1])
+            s = self._bytes_to_int(signature[self.public_key_length + 1:])
+
+            # Verify bounds
+            if not (0 <= recid < 2 * (self.curve.curve.p() // self.curve.order + 1)):
+                raise ValueError("Invalid recovery ID")
+            if r >= self.curve.order:
+                raise ValueError("r is out of bounds")
+            if s >= self.curve.order:
+                raise ValueError("s is out of bounds")
+
+            z = self._bytes_to_int(subject[:self.curve.baselen])
+            rinv = ecdsa.numbertheory.inverse_mod(r, self.curve.order)
+            u1 = (-z * rinv) % self.curve.order
+            u2 = (s * rinv) % self.curve.order
+
+            # Recover R
+            rx = r + (recid // 2) * self.curve.order
+            if rx >= self.curve.order:
+                raise ValueError("Rx is out of bounds")
+            ry_mod = (recid % 2) ^ (s * 2 >= self.curve.order)
+
+            # Almost copied from decompress_point
+            p, a, b = self.curve.curve.p(), self.curve.curve.a(), self.curve.curve.b()
+            ry_square = (pow(rx, 3, p) + a * rx + b) % p
+            try:
+                ry = ecdsa.numbertheory.square_root_mod_prime(ry_square, p)
+            except Exception:
+                raise ValueError("Invalid recovered public key") from None
+            # Ensure the point is correct
+            if ry % 2 != ry_mod:
+                # Fix Ry sign
+                ry = p - ry
+            rp = ecdsa.ellipticcurve.Point(self.curve.curve, rx, ry, self.curve.order)
+
+            # Convert to Jacobian for performance
+            curve_jacobian = wcurve._Curve(
+                self.curve.curve.a(),
+                self.curve.curve.b(),
+                self.curve.curve.p(),
+                self.curve.generator.x(),
+                self.curve.generator.y(),
+                self.curve.order,
+                # Should be the right cofactor, but it doesn't affect our
+                # calculations
+                0
+            )
+            rp_jacobian = wcurve.JacobianPoint.from_affine(rp.x(), rp.y(), curve_jacobian)
+
+            result = curve_jacobian.base_point * u1 + rp_jacobian * u2
+            x, y = result.to_affine()
+            return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
 class RSA:

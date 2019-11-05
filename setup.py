@@ -12,6 +12,7 @@ setup(
     packages=["sslcrypto"],
     install_requires=[
         "pyaes==1.6.1",
-        "ecdsa==0.13.3"
+        "ecdsa==0.13.3",
+        "wcurve==0.1.9"
     ]
 )
