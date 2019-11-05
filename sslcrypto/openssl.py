@@ -1,3 +1,4 @@
+import hashlib
 import ctypes
 import os
 from ._ecc import ECC
@@ -126,14 +127,25 @@ class BN:
     def __init__(self, value=None):
         if value is None:
             self.bn = lib.BN_new()
+            self._free = True
         elif isinstance(value, bytes):
             self.bn = lib.BN_bin2bn(value, len(value), None)
+            self._free = True
         else:
-            raise ValueError("Cannot create BN from {}".format(type(value)))
+            self.bn = lib.BN_new()
+            lib.BN_clear(self.bn)
+            lib.BN_add_word(self.bn, value)
+            self._free = True
 
+    @classmethod
+    def link(cls, bn):
+        obj = cls(bn)
+        obj._free = False
+        return obj
 
     def __del__(self):
-        lib.BN_free(self.bn)
+        if self._free:
+            lib.BN_free(self.bn)
 
 
     def bytes(self, length=None):
@@ -143,9 +155,126 @@ class BN:
         lib.BN_bn2bin(self.bn, buf)
         return bytes(buf)
 
+    def __int__(self):
+        value = 0
+        for byte in self.bytes():
+            value = value * 256 + byte
+        return value
 
     def __len__(self):
         return lib.BN_num_bits(self.bn)
+
+
+    def inverse(self, modulo):
+        ctx = lib.BN_CTX_new()
+        try:
+            result = BN()
+            if not lib.BN_mod_inverse(result.bn, self.bn, modulo.bn, ctx):
+                raise ValueError("Could not compute inverse")
+            return result
+        finally:
+            lib.BN_CTX_free(ctx)
+
+
+    def __floordiv__(self, other):
+        if not isinstance(other, BN):
+            raise TypeError("Can only divide BN by BN, not {}".format(other))
+        ctx = lib.BN_CTX_new()
+        try:
+            result = BN()
+            if not lib.BN_div(result.bn, None, self.bn, other.bn, ctx):
+                raise ZeroDivisionError("Division by zero")
+            return result
+        finally:
+            lib.BN_CTX_free(ctx)
+
+    def __mod__(self, other):
+        if not isinstance(other, BN):
+            raise TypeError("Can only divide BN by BN, not {}".format(other))
+        ctx = lib.BN_CTX_new()
+        try:
+            result = BN()
+            if not lib.BN_div(None, result.bn, self.bn, other.bn, ctx):
+                raise ZeroDivisionError("Division by zero")
+            return result
+        finally:
+            lib.BN_CTX_free(ctx)
+
+    def __add__(self, other):
+        if not isinstance(other, BN):
+            raise TypeError("Can only sum BN's, not BN and {}".format(other))
+        result = BN()
+        if not lib.BN_add(result.bn, self.bn, other.bn, None):
+            raise ValueError("Could not sum two BN's")
+        return result
+
+    def __sub__(self, other):
+        if not isinstance(other, BN):
+            raise TypeError("Can only subtract BN's, not BN and {}".format(other))
+        result = BN()
+        if not lib.BN_sub(result.bn, self.bn, other.bn, None):
+            raise ValueError("Could not subtract BN from BN")
+        return result
+
+    def __mul__(self, other):
+        if not isinstance(other, BN):
+            raise TypeError("Can only multiply BN by BN, not {}".format(other))
+        ctx = lib.BN_CTX_new()
+        try:
+            result = BN()
+            if not lib.BN_mul(result.bn, self.bn, other.bn, ctx):
+                raise ValueError("Could not multiply two BN's")
+            return result
+        finally:
+            lib.BN_CTX_free(ctx)
+
+    def __neg__(self):
+        return BN(0) - self
+
+
+    # A dirty but nice way to update current BN and free old BN at the same time
+    def __imod__(self, other):
+        res = self % other
+        self.bn, res.bn = res.bn, self.bn
+        return self
+    def __iadd__(self, other):
+        res = self + other
+        self.bn, res.bn = res.bn, self.bn
+        return self
+    def __isub__(self, other):
+        res = self - other
+        self.bn, res.bn = res.bn, self.bn
+        return self
+    def __imul__(self, other):
+        res = self * other
+        self.bn, res.bn = res.bn, self.bn
+        return self
+
+
+    def cmp(self, other):
+        if not isinstance(other, BN):
+            raise TypeError("Can only compare BN with BN, not {}".format(other))
+        return lib.BN_cmp(self.bn, other.bn)
+
+    def __eq__(self, other):
+        return self.cmp(other) == 0
+    def __lt__(self, other):
+        return self.cmp(other) < 0
+    def __gt__(self, other):
+        return self.cmp(other) > 0
+    def __ne__(self, other):
+        return self.cmp(other) != 0
+    def __le__(self, other):
+        return self.cmp(other) <= 0
+    def __ge__(self, other):
+        return self.cmp(other) >= 0
+
+
+    def __repr__(self):
+        return "<BN {}>".format(int(self))
+
+    def __str__(self):
+        return str(int(self))
 
 
 class ECCBackend:
@@ -196,10 +325,15 @@ class ECCBackend:
             if not self.group:
                 raise ValueError("Curve {} is unsupported by OpenSSL".format(name))
 
-            # Get public key length by checking order
-            order = BN()
-            lib.EC_GROUP_get_order(self.group, order.bn, None)
-            self.public_key_length = (len(order) + 7) // 8
+            self.order = BN()
+            self.p = BN()
+            cofactor = BN()
+            lib.EC_GROUP_get_order(self.group, self.order.bn, None)
+            lib.EC_GROUP_get_curve_GFp(self.group, self.p.bn, None, None, None)
+            lib.EC_GROUP_get_cofactor(self.group, cofactor.bn, None)
+
+            self.public_key_length = (len(self.order) + 7) // 8
+            self.cofactor = int(cofactor)
 
 
         def __del__(self):
@@ -233,7 +367,7 @@ class ECCBackend:
             # Convert to affine coordinates
             x = BN()
             y = BN()
-            if not lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None):
+            if lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None) != 1:
                 raise ValueError("Failed to convert public key to affine coordinates")
             # Convert to binary
             if (len(x) + 7) // 8 > self.public_key_length:
@@ -260,7 +394,7 @@ class ECCBackend:
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             lib.EC_KEY_generate_key(eckey)
             # To big integer
-            private_key = BN(lib.EC_KEY_get0_private_key(eckey))
+            private_key = BN.link(lib.EC_KEY_get0_private_key(eckey))
             # To binary
             private_key_buf = private_key.bytes()
             # Cleanup
@@ -333,6 +467,143 @@ class ECCBackend:
                     lib.EVP_PKEY_free(pkey)
             finally:
                 lib.EC_KEY_free(eckey)
+
+
+        def sign(self, data, private_key, hash, recoverable):
+            if callable(hash):
+                subject = hash(data)
+            elif hash == "sha256":
+                h = hashlib.sha256()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha512":
+                h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash is None:
+                # *Highly* unrecommended. Only use this if the input is very
+                # small
+                subject = data
+            else:
+                raise ValueError("Unsupported hash function")
+
+            z = BN(subject[:len(self.order)])
+            private_key = BN(private_key)
+
+            eckey = lib.EC_KEY_new_by_curve_name(self.nid)
+            if not eckey:
+                raise ValueError("Could not create EC_KEY")
+
+            try:
+                while True:
+                    # Generate k randomly. We abuse EC_KEY_generate_key behavior
+                    # here: whilst k is not a real private key, it has the same
+                    # domain
+                    if not lib.EC_KEY_generate_key(eckey):
+                        raise ValueError("Could not generate EC_KEY")
+                    k = BN.link(lib.EC_KEY_get0_private_key(eckey))
+                    rp = lib.EC_POINT_new(self.group)
+                    try:
+                        if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
+                            raise ValueError("Could not generate R")
+                        # Convert to affine coordinates
+                        rx = BN()
+                        ry = BN()
+                        if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
+                            raise ValueError("Failed to convert R to affine coordinates")
+                        print(rx, ry)
+                        r = rx % self.order
+                        if r == BN(0):
+                            continue
+                        # Calculate s = k^-1 * (z + r * private_key) mod n
+                        s = (k.inverse(self.order) * (z + r * private_key)) % self.order
+                        if s == BN(0):
+                            continue
+                        r_buf = r.bytes(self.public_key_length)
+                        s_buf = s.bytes(self.public_key_length)
+                        if recoverable:
+                            # Generate recid
+                            recid = (int(ry % BN(2))) ^ (s * BN(2) >= self.order)
+                            # The line below is highly unlikely to matter in case of
+                            # secp256k1 but might make sense for other curves
+                            recid += 2 * int(rx // self.order)
+                            return bytes([27 + recid]) + r_buf + s_buf
+                        else:
+                            return r_buf + s_buf
+                    finally:
+                        lib.EC_POINT_free(rp)
+            finally:
+                lib.EC_KEY_free(eckey)
+
+
+        def recover(self, signature, data, hash):
+            if callable(hash):
+                subject = hash(data)
+            elif hash == "sha256":
+                h = hashlib.sha256()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha512":
+                h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash is None:
+                # *Highly* unrecommended. Only use this if the input is very
+                # small
+                subject = data
+            else:
+                raise ValueError("Unsupported hash function")
+
+            recid = signature[0] - 27
+            r = BN(signature[1:self.public_key_length + 1])
+            s = BN(signature[self.public_key_length + 1:])
+
+            # Verify bounds
+            if not (0 <= recid < 2 * (self.cofactor + 1)):
+                raise ValueError("Invalid recovery ID")
+            if r >= self.order:
+                raise ValueError("r is out of bounds")
+            if s >= self.order:
+                raise ValueError("s is out of bounds")
+
+            z = BN(subject[:len(self.order)])
+            rinv = r.inverse(self.order)
+            u1 = (-z * rinv) % self.order
+            u2 = (s * rinv) % self.order
+
+            # Recover R
+            rx = r + BN(recid // 2) * self.order
+            if rx >= self.order:
+                raise ValueError("Rx is out of bounds")
+            ry_mod = (recid % 2) ^ (s * BN(2) >= self.order)
+            rp = lib.EC_POINT_new(self.group)
+            if not rp:
+                raise ValueError("Could not create R")
+            try:
+                init_buf = b"\x02" + rx.bytes(self.public_key_length)
+                if not lib.EC_POINT_oct2point(self.group, rp, init_buf, len(init_buf), None):
+                    raise ValueError("Could not use Rx to initialize point")
+                ry = BN()
+                if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, None, ry.bn, None) != 1:
+                    raise ValueError("Failed to convert R to affine coordinates")
+                if int(ry % BN(2)) != ry_mod:
+                    # Fix Ry sign
+                    ry = self.p - ry
+                    if lib.EC_POINT_set_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
+                        raise ValueError("Failed to update R coordinates")
+
+                # Recover public key
+                result = lib.EC_POINT_new(self.group)
+                if not result:
+                    raise ValueError("Could not create point")
+                try:
+                    if not lib.EC_POINT_mul(self.group, result, u1.bn, rp, u2.bn, None):
+                        raise ValueError("Could not recover public key")
+                    return self._point_to_affine(result)
+                finally:
+                    lib.EC_POINT_free(result)
+            finally:
+                lib.EC_POINT_free(rp)
 
 
 class RSA:

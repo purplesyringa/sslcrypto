@@ -205,3 +205,15 @@ class EllipticCurve:
 
         from . import aes
         return aes.decrypt(ciphertext, iv, k_enc)
+
+
+    def sign(self, data, private_key, hash="sha256", recoverable=False):
+        return self._backend.sign(data, private_key, hash, recoverable)
+
+
+    def recover(self, signature, data, hash="sha256"):
+        # Sanity check: is this signature recoverable?
+        if len(signature) != 1 + 2 * self._backend.public_key_length:
+            raise ValueError("Cannot recover an unrecoverable signature")
+        x, y = self._backend.recover(signature, data, hash)
+        return self._encode_public_key(x, y)
