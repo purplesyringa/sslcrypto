@@ -1,12 +1,12 @@
 from . import library
 
-__all__ = ["aes", "ecies", "rsa"]
+__all__ = ["aes", "ecc", "rsa"]
 
 lib = library.discoverLibrary()
 if lib:
 	from . import openssl
 	openssl.lib = lib
 	openssl.init()
-	aes, ecies, rsa = openssl.aes, openssl.ecies, openssl.rsa
+	aes, ecc, rsa = openssl.aes, openssl.ecc, openssl.rsa
 else:
-	from .fallback import aes, ecies, rsa
+	from .fallback import aes, ecc, rsa

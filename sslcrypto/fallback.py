@@ -85,7 +85,7 @@ class AES:
 		return data
 
 
-class ECIES:
+class ECC:
 	pass
 
 
@@ -94,5 +94,5 @@ class RSA:
 
 
 aes = AES()
-ecies = ECIES()
+ecc = ECC()
 rsa = RSA()
