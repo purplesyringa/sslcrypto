@@ -276,10 +276,14 @@ class ECCBackend:
                     k = (k + 1) % self.n
                     continue
 
-                recid = (py % 2) ^ (s * 2 >= self.n)
-                recid += 2 * int(px // self.n)
+                rs_bus = self._int_to_bytes(r) + self._int_to_bytes(s)
 
-                return bytes([31 + recid]) + self._int_to_bytes(r) + self._int_to_bytes(s)
+                if recoverable:
+                    recid = (py % 2) ^ (s * 2 >= self.n)
+                    recid += 2 * int(px // self.n)
+                    return bytes([31 + recid]) + rs_bus
+                else:
+                    return rs_bus
 
 
         def recover(self, signature, data, hash):
