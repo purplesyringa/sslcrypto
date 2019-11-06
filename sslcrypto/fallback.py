@@ -332,7 +332,7 @@ class ECCBackend:
 
             # Recover R
             rx = r + (recid // 2) * self.n
-            if rx >= self.n:
+            if rx >= self.p:
                 raise ValueError("Rx is out of bounds")
             ry_mod = recid % 2
 
