@@ -139,7 +139,9 @@ class BN:
 
     @classmethod
     def link(cls, bn):
-        obj = cls(bn)
+        obj = cls()
+        lib.BN_free(obj.bn)
+        obj.bn = bn
         obj._free = False
         return obj
 
@@ -319,6 +321,8 @@ class ECCBackend:
 
     class EllipticCurveBackend:
         def __init__(self, name):
+            self.aes = aes
+
             self.lib = lib  # For finalizer
             self.nid = ECCBackend.NIDS[name]
             self.group = lib.EC_GROUP_new_by_curve_name(self.nid)

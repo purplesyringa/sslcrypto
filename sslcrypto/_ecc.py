@@ -121,8 +121,7 @@ class EllipticCurve:
         k_enc, k_mac = key[:32], key[32:]
 
         # Encrypt
-        from . import aes
-        ciphertext, iv = aes.encrypt(data, k_enc, algo=algo)
+        ciphertext, iv = self._backend.aes.encrypt(data, k_enc, algo=algo)
         ciphertext = iv + self.private_to_public(private_key) + ciphertext
 
         # Add MAC tag
@@ -203,8 +202,7 @@ class EllipticCurve:
         if not hmac.compare_digest(tag, expected_tag):
             raise ValueError("Invalid MAC tag")
 
-        from . import aes
-        return aes.decrypt(ciphertext, iv, k_enc)
+        return self._backend.aes.decrypt(ciphertext, iv, k_enc)
 
 
     def sign(self, data, private_key, hash="sha256", recoverable=False):

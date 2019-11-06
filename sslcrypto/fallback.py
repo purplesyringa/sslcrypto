@@ -1,6 +1,5 @@
 import hashlib
 import pyaes
-import ecdsa
 import time
 import os
 from . import _jacobian as jacobian
@@ -96,8 +95,10 @@ class ECCBackend:
             0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_FFFFFC2F,
             0,
             7,
-            0x79BE667E_F9DCBBAC_55A06295_CE870B07_029BFCDB_2DCE28D9_59F2815B_16F81798,
-            0x483ADA77_26A3C465_5DA4FBFC_0E1108A8_FD17B448_A6855419_9C47D08F_FB10D4B8,
+            (
+                0x79BE667E_F9DCBBAC_55A06295_CE870B07_029BFCDB_2DCE28D9_59F2815B_16F81798,
+                0x483ADA77_26A3C465_5DA4FBFC_0E1108A8_FD17B448_A6855419_9C47D08F_FB10D4B8
+            ),
             0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_BAAEDCE6_AF48A03B_BFD25E8C_D0364141
         )
     }
@@ -107,17 +108,11 @@ class ECCBackend:
 
     class EllipticCurveBackend:
         def __init__(self, name):
+            self.aes = aes
+
             # Create curve object
-            p, a, b, gx, gy, n = ECCBackend.CURVES[name]
-            field = ecdsa.ellipticcurve.CurveFp(p, a, b)
-            self.curve = ecdsa.curves.Curve(
-                name,
-                field,
-                ecdsa.ellipticcurve.Point(field, gx, gy, n),
-                (0, 0),  # oid should be here, but it's not required
-                name
-            )
-            self.public_key_length = (len(bin(n).replace("0b", "")) + 7) // 8
+            self.p, self.a, self.b, self.g, self.n = ECCBackend.CURVES[name]
+            self.public_key_length = (len(bin(self.n).replace("0b", "")) + 7) // 8
 
 
         def _int_to_bytes(self, raw):
@@ -135,34 +130,93 @@ class ECCBackend:
             return raw
 
 
+        def _legendre(self, a, p):
+            res = pow(a, (p - 1) // 2, p)
+            if res == p - 1:
+                return -1
+            else:
+                return res
+
+
+        def _square_root_mod_prime(self, n, p):
+            if n == 0:
+                return 0
+            if p == 2:
+                return n  # We should never get here but it might be useful
+            if self._legendre(n, p) != 1:
+                raise ValueError("No square root")
+            # Optimizations
+            if p % 4 == 3:
+                return pow(n, (p + 1) // 4, p)
+            # 1. By factoring out powers of 2, find Q and S such that p - 1 =
+            # Q * 2 ** S with Q odd
+            q = p - 1
+            s = 0
+            while q % 2 == 0:
+                q //= 2
+                s += 1
+            # 2. Search for z in Z/pZ which is a quadratic non-residue
+            z = 1
+            while self._legendre(z, p) != -1:
+                z += 1
+            m, c, t, r = s, pow(z, q, p), pow(n, q, p), pow(n, (q + 1) // 2, p)
+            while True:
+                if t == 0:
+                    return 0
+                elif t == 1:
+                    return r
+                # Use repeated squaring to find the least i, 0 < i < M, such
+                # that t ** (2 ** i) = 1
+                t_sq = t
+                i = 0
+                for i in range(1, m):
+                    t_sq = t_sq * t_sq % p
+                    if t_sq == 1:
+                        break
+                else:
+                    raise ValueError("Should never get here")
+                # Let b = c ** (2 ** (m - i - 1))
+                b = pow(c, 2 ** (m - i - 1), p)
+                m = i
+                c = b * b % p
+                t = t * b * b % p
+                r = r * b % p
+            return r
+
+
+
         def decompress_point(self, public_key):
             # Parse & load data
-            p, a, b = self.curve.curve.p(), self.curve.curve.a(), self.curve.curve.b()
             x = self._bytes_to_int(public_key[1:])
             # Calculate Y
-            y_square = (pow(x, 3, p) + a * x + b) % p
+            y_square = (pow(x, 3, self.p) + self.a * x + self.b) % self.p
             try:
-                y = ecdsa.numbertheory.square_root_mod_prime(y_square, p)
+                y = self._square_root_mod_prime(y_square, self.p)
             except Exception:
                 raise ValueError("Invalid public key") from None
             if y % 2 != public_key[0] - 0x02:
-                y = p - y
-            # Ensure the point is correct
-            if not ecdsa.ecdsa.point_is_valid(self.curve.generator, x, y):
-                raise ValueError("Public key does not lay on the curve")
+                y = self.p - y
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
         def new_private_key(self):
-            raw = ecdsa.SigningKey.generate(curve=self.curve).privkey.secret_multiplier
-            return self._int_to_bytes(raw)
+            while True:
+                private_key = os.urandom(self.public_key_length)
+                if self._bytes_to_int(private_key) >= self.n:
+                    continue
+                return private_key
 
 
         def private_to_public(self, private_key):
             raw = self._bytes_to_int(private_key)
-            sk = ecdsa.SigningKey.from_secret_exponent(raw, curve=self.curve)
-            point = sk.verifying_key.pubkey.point
-            x, y = point.x(), point.y()
+            jacobian.change_curve(
+                self.p,
+                self.n,
+                self.a,
+                self.b,
+                *self.g
+            )
+            x, y = jacobian.fast_multiply(jacobian.G, raw)
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
@@ -170,8 +224,16 @@ class ECCBackend:
             x, y = public_key
             x, y = self._bytes_to_int(x), self._bytes_to_int(y)
             private_key = self._bytes_to_int(private_key)
-            point = ecdsa.ellipticcurve.Point(self.curve.curve, x, y, order=self.curve.order)
-            return self._int_to_bytes((point * private_key).x())
+
+            jacobian.change_curve(
+                self.p,
+                self.n,
+                self.a,
+                self.b,
+                *self.g
+            )
+            x, _ = jacobian.fast_multiply((x, y), private_key)
+            return self._int_to_bytes(x)
 
 
         def sign(self, data, private_key, hash, recoverable):
@@ -193,46 +255,51 @@ class ECCBackend:
                 raise ValueError("Unsupported hash function")
 
             z = self._bytes_to_int(subject[:self.public_key_length])
+            private_key = self._bytes_to_int(private_key)
 
-            raw_private_key = self._bytes_to_int(private_key)
-            sk = ecdsa.SigningKey.from_secret_exponent(raw_private_key, curve=self.curve)
-
-            g = sk.privkey.public_key.generator
-            order = g.order()
+            jacobian.change_curve(
+                self.p,
+                self.n,
+                self.a,
+                self.b,
+                *self.g
+            )
 
             # Generate k deterministically from data
             h = hashlib.sha512()
             h.update(data)
             h.update(b"\x00")
             h.update(str(time.time()).encode())
-            k = self._bytes_to_int(h.digest()) % order
+            k = self._bytes_to_int(h.digest()) % self.n
 
             while True:
                 # Fix k length to prevent Minerva. Increasing multiplier by a
                 # multiple of order doesn't break anything. This fix was ported
                 # from python-ecdsa
-                ks = k + order
-                kt = ks + order
+                ks = k + self.n
+                kt = ks + self.n
                 ks_len = len(bin(ks).replace("0b", "")) // 8
                 kt_len = len(bin(kt).replace("0b", "")) // 8
                 if ks_len == kt_len:
-                    p1 = kt * g
+                    k = kt
                 else:
-                    p1 = ks * g
-                r = p1.x() % order
+                    k = ks
+                px, py = jacobian.fast_multiply(jacobian.G, k)
+
+                r = px % self.n
                 if r == 0:
                     # Invalid k, try increasing it
-                    k = (k + 1) % order
+                    k = (k + 1) % self.n
                     continue
 
-                s = (ecdsa.numbertheory.inverse_mod(k, order) * (z + (sk.privkey.secret_multiplier * r))) % order
+                s = (jacobian.inv(k, self.n) * (z + (private_key * r))) % self.n
                 if s == 0:
                     # Invalid k, try increasing it
-                    k = (k + 1) % order
+                    k = (k + 1) % self.n
                     continue
 
-                recid = (p1.y() % 2) ^ (s * 2 >= order)
-                recid += 2 * int(p1.x() // order)
+                recid = (py % 2) ^ (s * 2 >= self.n)
+                recid += 2 * int(px // self.n)
 
                 return bytes([31 + recid]) + self._int_to_bytes(r) + self._int_to_bytes(s)
 
@@ -255,54 +322,51 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            recid = signature[0] - 31
+            recid = signature[0] - 27 if signature[0] < 31 else signature[0] - 31
             r = self._bytes_to_int(signature[1:self.public_key_length + 1])
             s = self._bytes_to_int(signature[self.public_key_length + 1:])
 
             # Verify bounds
-            if not (0 <= recid < 2 * (self.curve.curve.p() // self.curve.order + 1)):
+            if not (0 <= recid < 2 * (self.p // self.n + 1)):
                 raise ValueError("Invalid recovery ID")
-            if r >= self.curve.order:
+            if r >= self.n:
                 raise ValueError("r is out of bounds")
-            if s >= self.curve.order:
+            if s >= self.n:
                 raise ValueError("s is out of bounds")
 
-            z = self._bytes_to_int(subject[:self.curve.baselen])
-            rinv = ecdsa.numbertheory.inverse_mod(r, self.curve.order)
-            u1 = (-z * rinv) % self.curve.order
-            u2 = (s * rinv) % self.curve.order
+            z = self._bytes_to_int(subject[:self.public_key_length])
+            rinv = jacobian.inv(r, self.n)
+            u1 = (-z * rinv) % self.n
+            u2 = (s * rinv) % self.n
 
             # Recover R
-            rx = r + (recid // 2) * self.curve.order
-            if rx >= self.curve.order:
+            rx = r + (recid // 2) * self.n
+            if rx >= self.n:
                 raise ValueError("Rx is out of bounds")
-            ry_mod = (recid % 2) ^ (s * 2 >= self.curve.order)
+            ry_mod = (recid % 2) ^ (s * 2 >= self.n)
 
             # Almost copied from decompress_point
-            p, a, b = self.curve.curve.p(), self.curve.curve.a(), self.curve.curve.b()
-            ry_square = (pow(rx, 3, p) + a * rx + b) % p
+            ry_square = (pow(rx, 3, self.p) + self.a * rx + self.b) % self.p
             try:
-                ry = ecdsa.numbertheory.square_root_mod_prime(ry_square, p)
+                ry = self._square_root_mod_prime(ry_square, self.p)
             except Exception:
                 raise ValueError("Invalid recovered public key") from None
             # Ensure the point is correct
             if ry % 2 != ry_mod:
                 # Fix Ry sign
-                ry = p - ry
-            rp = ecdsa.ellipticcurve.Point(self.curve.curve, rx, ry, self.curve.order)
+                ry = self.p - ry
 
             # Convert to Jacobian for performance
             jacobian.change_curve(
-                self.curve.curve.p(),
-                self.curve.order,
-                self.curve.curve.a(),
-                self.curve.curve.b(),
-                self.curve.generator.x(),
-                self.curve.generator.y()
+                self.p,
+                self.n,
+                self.a,
+                self.b,
+                *self.g
             )
             x, y = jacobian.fast_add(
                 jacobian.fast_multiply(jacobian.G, u1),
-                jacobian.fast_multiply((rp.x(), rp.y()), u2)
+                jacobian.fast_multiply((rx, ry), u2)
             )
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
