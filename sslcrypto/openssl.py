@@ -151,11 +151,15 @@ class BN:
 
 
     def bytes(self, length=None):
-        if length is None:
-            length = (len(self) + 7) // 8
-        buf = ctypes.create_string_buffer(length)
+        buf = ctypes.create_string_buffer((len(self) + 7) // 8)
         lib.BN_bn2bin(self.bn, buf)
-        return bytes(buf)
+        buf = bytes(buf)
+        if length is None:
+            return buf
+        else:
+            if length < len(buf):
+                raise ValueError("Too little space for BN")
+            return b"\x00" * (length - len(buf)) + buf
 
     def __int__(self):
         value = 0
