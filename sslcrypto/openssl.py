@@ -339,6 +339,8 @@ class ECCBackend:
             self.public_key_length = (len(self.order) + 7) // 8
             self.cofactor = int(cofactor)
 
+            self.is_supported_evp_pkey_ctx = hasattr(lib, "EVP_PKEY_CTX_new")
+
 
         def __del__(self):
             self.lib.EC_GROUP_free(self.group)
@@ -355,20 +357,28 @@ class ECCBackend:
             return eckey, private_key
 
 
+        def _public_key_to_point(self, public_key):
+            x = BN(public_key[0])
+            y = BN(public_key[1])
+            # EC_KEY_set_public_key_affine_coordinates is not supported by
+            # OpenSSL 1.0.0 so we can't use it
+            point = lib.EC_POINT_new(self.group)
+            if not lib.EC_POINT_set_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None):
+                raise ValueError("Could not set public key affine coordinates")
+            return point
+
+
         def _public_key_to_ec_key(self, public_key):
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             if not eckey:
                 raise ValueError("Failed to allocate EC_KEY")
             try:
-                x = BN(public_key[0])
-                y = BN(public_key[1])
                 # EC_KEY_set_public_key_affine_coordinates is not supported by
                 # OpenSSL 1.0.0 so we can't use it
-                point = lib.EC_POINT_new(self.group)
-                if not lib.EC_POINT_set_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None):
-                    raise ValueError("Could not set public key affine coordinates")
+                point = self._public_key_to_point(public_key)
                 if not lib.EC_KEY_set_public_key(eckey, point):
                     raise ValueError("Could not set point")
+                lib.EC_POINT_free(point)
                 return eckey
             except Exception as e:
                 lib.EC_KEY_free(eckey)
@@ -430,6 +440,23 @@ class ECCBackend:
 
 
         def ecdh(self, private_key, public_key):
+            if not self.is_supported_evp_pkey_ctx:
+                # Use ECDH_compute_key instead
+                # Create EC_KEY from private key
+                eckey, _ = self._private_key_to_ec_key(private_key)
+                try:
+                    # Create EC_POINT from public key
+                    point = self._public_key_to_point(public_key)
+                    try:
+                        key = ctypes.create_string_buffer(self.public_key_length)
+                        if lib.ECDH_compute_key(key, self.public_key_length, point, eckey, None) == -1:
+                            raise ValueError("Could not compute shared secret")
+                        return bytes(key)
+                    finally:
+                        lib.EC_POINT_free(point)
+                finally:
+                    lib.EC_KEY_free(eckey)
+
             # Private key:
             # Create EC_KEY
             eckey, _ = self._private_key_to_ec_key(private_key)
