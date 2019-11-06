@@ -2,7 +2,7 @@ import hashlib
 import pyaes
 import time
 import os
-from . import _jacobian as jacobian
+from ._jacobian import JacobianCurve
 from ._ecc import ECC
 
 __all__ = ["aes", "ecies", "rsa"]
@@ -93,13 +93,13 @@ class ECCBackend:
     CURVES = {
         "secp256k1": (
             0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_FFFFFC2F,
+            0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_BAAEDCE6_AF48A03B_BFD25E8C_D0364141,
             0,
             7,
             (
                 0x79BE667E_F9DCBBAC_55A06295_CE870B07_029BFCDB_2DCE28D9_59F2815B_16F81798,
                 0x483ADA77_26A3C465_5DA4FBFC_0E1108A8_FD17B448_A6855419_9C47D08F_FB10D4B8
-            ),
-            0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE_BAAEDCE6_AF48A03B_BFD25E8C_D0364141
+            )
         )
     }
 
@@ -110,8 +110,9 @@ class ECCBackend:
         def __init__(self, name):
             self.aes = aes
 
-            # Create curve object
-            self.p, self.a, self.b, self.g, self.n = ECCBackend.CURVES[name]
+            self.p, self.n, self.a, self.b, self.g = ECCBackend.CURVES[name]
+            self.jacobian = JacobianCurve(*ECCBackend.CURVES[name])
+
             self.public_key_length = (len(bin(self.n).replace("0b", "")) + 7) // 8
 
 
@@ -209,14 +210,7 @@ class ECCBackend:
 
         def private_to_public(self, private_key):
             raw = self._bytes_to_int(private_key)
-            jacobian.change_curve(
-                self.p,
-                self.n,
-                self.a,
-                self.b,
-                *self.g
-            )
-            x, y = jacobian.fast_multiply(jacobian.G, raw)
+            x, y = self.jacobian.fast_multiply(self.g, raw)
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
@@ -224,15 +218,7 @@ class ECCBackend:
             x, y = public_key
             x, y = self._bytes_to_int(x), self._bytes_to_int(y)
             private_key = self._bytes_to_int(private_key)
-
-            jacobian.change_curve(
-                self.p,
-                self.n,
-                self.a,
-                self.b,
-                *self.g
-            )
-            x, _ = jacobian.fast_multiply((x, y), private_key)
+            x, _ = self.jacobian.fast_multiply((x, y), private_key)
             return self._int_to_bytes(x)
 
 
@@ -257,14 +243,6 @@ class ECCBackend:
             z = self._bytes_to_int(subject[:self.public_key_length])
             private_key = self._bytes_to_int(private_key)
 
-            jacobian.change_curve(
-                self.p,
-                self.n,
-                self.a,
-                self.b,
-                *self.g
-            )
-
             # Generate k deterministically from data
             h = hashlib.sha512()
             h.update(data)
@@ -284,7 +262,7 @@ class ECCBackend:
                     k = kt
                 else:
                     k = ks
-                px, py = jacobian.fast_multiply(jacobian.G, k)
+                px, py = self.jacobian.fast_multiply(self.g, k)
 
                 r = px % self.n
                 if r == 0:
@@ -292,7 +270,7 @@ class ECCBackend:
                     k = (k + 1) % self.n
                     continue
 
-                s = (jacobian.inv(k, self.n) * (z + (private_key * r))) % self.n
+                s = (self.jacobian.inv(k, self.n) * (z + (private_key * r))) % self.n
                 if s == 0:
                     # Invalid k, try increasing it
                     k = (k + 1) % self.n
@@ -335,7 +313,7 @@ class ECCBackend:
                 raise ValueError("s is out of bounds")
 
             z = self._bytes_to_int(subject[:self.public_key_length])
-            rinv = jacobian.inv(r, self.n)
+            rinv = self.jacobian.inv(r, self.n)
             u1 = (-z * rinv) % self.n
             u2 = (s * rinv) % self.n
 
@@ -356,17 +334,9 @@ class ECCBackend:
                 # Fix Ry sign
                 ry = self.p - ry
 
-            # Convert to Jacobian for performance
-            jacobian.change_curve(
-                self.p,
-                self.n,
-                self.a,
-                self.b,
-                *self.g
-            )
-            x, y = jacobian.fast_add(
-                jacobian.fast_multiply(jacobian.G, u1),
-                jacobian.fast_multiply((rx, ry), u2)
+            x, y = self.jacobian.fast_add(
+                self.jacobian.fast_multiply(self.g, u1),
+                self.jacobian.fast_multiply((rx, ry), u2)
             )
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
