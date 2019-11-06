@@ -311,25 +311,7 @@ class ECCBackend:
         "secp224r1": 713,
         "secp256k1": 714,
         "secp384r1": 715,
-        "secp521r1": 716,
-        "sect113r1": 717,
-        "sect113r2": 718,
-        "sect131r1": 719,
-        "sect131r2": 720,
-        "sect163k1": 721,
-        "sect163r1": 722,
-        "sect163r2": 723,
-        "sect193r1": 724,
-        "sect193r2": 725,
-        "sect233k1": 726,
-        "sect233r1": 727,
-        "sect239k1": 728,
-        "sect283k1": 729,
-        "sect283r1": 730,
-        "sect409k1": 731,
-        "sect409r1": 732,
-        "sect571k1": 733,
-        "sect571r1": 734
+        "secp521r1": 716
     }
 
 
