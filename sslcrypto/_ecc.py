@@ -3,7 +3,7 @@ import hmac
 
 
 class ECC:
-    CURVES = {
+    CURVES = (
         "secp112r1", "secp112r2",
         "secp128r1", "secp128r2",
         "secp160k1", "secp160r1", "secp160r2",
@@ -12,7 +12,7 @@ class ECC:
         "secp256k1",
         "secp384r1",
         "secp521r1"
-    }
+    )
 
     def __init__(self, backend):
         self._backend = backend
