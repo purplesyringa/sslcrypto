@@ -508,6 +508,12 @@ class ECCBackend:
                 lib.EC_KEY_free(eckey)
 
 
+        def _subject_to_bn(self, subject):
+            subject = (b"\x00" + subject)[-len(self.order) // 8 - 1:]
+            subject = bytes([subject[0] % (2 ** (len(self.order) % 8))]) + subject[1:]
+            return BN(subject)
+
+
         def sign(self, data, private_key, hash, recoverable):
             if callable(hash):
                 subject = hash(data)
@@ -526,9 +532,7 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            subject = subject[:len(self.order) // 8 + 1]
-            subject = bytes([subject[0] % (2 ** (len(self.order) % 8))]) + subject[1:]
-            z = BN(subject)
+            z = self._subject_to_bn(subject)
 
             private_key = BN(private_key)
 
@@ -571,7 +575,7 @@ class ECCBackend:
                         s_buf = s.bytes(self.public_key_length)
                         if recoverable:
                             # Generate recid
-                            recid = (int(ry % BN(2))) ^ (s * BN(2) >= self.order)
+                            recid = (int(ry % BN(2)))
                             # The line below is highly unlikely to matter in case of
                             # secp256k1 but might make sense for other curves
                             recid += 2 * int(rx // self.order)
@@ -614,9 +618,7 @@ class ECCBackend:
             if s >= self.order:
                 raise ValueError("s is out of bounds")
 
-            subject = subject[:len(self.order) // 8 + 1]
-            subject = bytes([subject[0] % (2 ** (len(self.order) % 8))]) + subject[1:]
-            z = BN(subject)
+            z = self._subject_to_bn(subject)
 
             rinv = r.inverse(self.order)
             u1 = (-z * rinv) % self.order
@@ -626,7 +628,7 @@ class ECCBackend:
             rx = r + BN(recid // 2) * self.order
             if rx >= self.order:
                 raise ValueError("Rx is out of bounds")
-            ry_mod = (recid % 2) ^ (s * BN(2) >= self.order)
+            ry_mod = recid % 2
             rp = lib.EC_POINT_new(self.group)
             if not rp:
                 raise ValueError("Could not create R")

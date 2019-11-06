@@ -223,6 +223,12 @@ class ECCBackend:
             return self._int_to_bytes(x)
 
 
+        def _subject_to_int(self, subject):
+            subject = (b"\x00" + subject)[-self.order_bitlength // 8 - 1:]
+            subject = bytes([subject[0] % (2 ** (self.order_bitlength % 8))]) + subject[1:]
+            return self._bytes_to_int(subject)
+
+
         def sign(self, data, private_key, hash, recoverable):
             if callable(hash):
                 subject = hash(data)
@@ -241,9 +247,7 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            subject = subject[:self.order_bitlength // 8 + 1]
-            subject = bytes([subject[0] % (2 ** (self.order_bitlength % 8))]) + subject[1:]
-            z = self._bytes_to_int(subject)
+            z = self._subject_to_int(subject)
 
             private_key = self._bytes_to_int(private_key)
 
@@ -283,7 +287,7 @@ class ECCBackend:
                 rs_bus = self._int_to_bytes(r) + self._int_to_bytes(s)
 
                 if recoverable:
-                    recid = (py % 2) ^ (s * 2 >= self.n)
+                    recid = py % 2
                     recid += 2 * int(px // self.n)
                     return bytes([31 + recid]) + rs_bus
                 else:
@@ -320,9 +324,7 @@ class ECCBackend:
             if s >= self.n:
                 raise ValueError("s is out of bounds")
 
-            subject = subject[:self.order_bitlength // 8 + 1]
-            subject = bytes([subject[0] % (2 ** (self.order_bitlength % 8))]) + subject[1:]
-            z = self._bytes_to_int(subject)
+            z = self._subject_to_int(subject)
 
             rinv = self.jacobian.inv(r, self.n)
             u1 = (-z * rinv) % self.n
@@ -332,7 +334,7 @@ class ECCBackend:
             rx = r + (recid // 2) * self.n
             if rx >= self.n:
                 raise ValueError("Rx is out of bounds")
-            ry_mod = (recid % 2) ^ (s * 2 >= self.n)
+            ry_mod = recid % 2
 
             # Almost copied from decompress_point
             ry_square = (pow(rx, 3, self.p) + self.a * rx + self.b) % self.p
