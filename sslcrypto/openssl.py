@@ -359,12 +359,20 @@ class ECCBackend:
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             if not eckey:
                 raise ValueError("Failed to allocate EC_KEY")
-            x = BN(public_key[0])
-            y = BN(public_key[1])
-            if not lib.EC_KEY_set_public_key_affine_coordinates(eckey, x.bn, y.bn):
+            try:
+                x = BN(public_key[0])
+                y = BN(public_key[1])
+                # EC_KEY_set_public_key_affine_coordinates is not supported by
+                # OpenSSL 1.0.0 so we can't use it
+                point = lib.EC_POINT_new(self.group)
+                if not lib.EC_POINT_set_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None):
+                    raise ValueError("Could not set public key affine coordinates")
+                if not lib.EC_KEY_set_public_key(eckey, point):
+                    raise ValueError("Could not set point")
+                return eckey
+            except Exception as e:
                 lib.EC_KEY_free(eckey)
-                raise ValueError("Invalid private key")
-            return eckey
+                raise e from None
 
 
         def _point_to_affine(self, point):
