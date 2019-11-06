@@ -113,7 +113,8 @@ class ECCBackend:
             self.p, self.n, self.a, self.b, self.g = ECCBackend.CURVES[name]
             self.jacobian = JacobianCurve(*ECCBackend.CURVES[name])
 
-            self.public_key_length = (len(bin(self.n).replace("0b", "")) + 7) // 8
+            self.public_key_length = (len(bin(self.p).replace("0b", "")) + 7) // 8
+            self.order_bitlength = len(bin(self.n).replace("0b", ""))
 
 
         def _int_to_bytes(self, raw):
@@ -240,7 +241,10 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            z = self._bytes_to_int(subject[:self.public_key_length])
+            subject = subject[:self.order_bitlength // 8 + 1]
+            subject = bytes([subject[0] % (2 ** (self.order_bitlength % 8))]) + subject[1:]
+            z = self._bytes_to_int(subject)
+
             private_key = self._bytes_to_int(private_key)
 
             # Generate k deterministically from data
@@ -316,7 +320,10 @@ class ECCBackend:
             if s >= self.n:
                 raise ValueError("s is out of bounds")
 
-            z = self._bytes_to_int(subject[:self.public_key_length])
+            subject = subject[:self.order_bitlength // 8 + 1]
+            subject = bytes([subject[0] % (2 ** (self.order_bitlength % 8))]) + subject[1:]
+            z = self._bytes_to_int(subject)
+
             rinv = self.jacobian.inv(r, self.n)
             u1 = (-z * rinv) % self.n
             u2 = (s * rinv) % self.n

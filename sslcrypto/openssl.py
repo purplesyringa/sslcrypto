@@ -336,7 +336,7 @@ class ECCBackend:
             lib.EC_GROUP_get_curve_GFp(self.group, self.p.bn, None, None, None)
             lib.EC_GROUP_get_cofactor(self.group, cofactor.bn, None)
 
-            self.public_key_length = (len(self.order) + 7) // 8
+            self.public_key_length = (len(self.p) + 7) // 8
             self.cofactor = int(cofactor)
 
             self.is_supported_evp_pkey_ctx = hasattr(lib, "EVP_PKEY_CTX_new")
@@ -526,7 +526,10 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            z = BN(subject[:len(self.order)])
+            subject = subject[:len(self.order) // 8 + 1]
+            subject = bytes([subject[0] % (2 ** (len(self.order) % 8))]) + subject[1:]
+            z = BN(subject)
+
             private_key = BN(private_key)
 
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
@@ -611,7 +614,10 @@ class ECCBackend:
             if s >= self.order:
                 raise ValueError("s is out of bounds")
 
-            z = BN(subject[:len(self.order)])
+            subject = subject[:len(self.order) // 8 + 1]
+            subject = bytes([subject[0] % (2 ** (len(self.order) % 8))]) + subject[1:]
+            z = BN(subject)
+
             rinv = r.inverse(self.order)
             u1 = (-z * rinv) % self.order
             u2 = (s * rinv) % self.order
