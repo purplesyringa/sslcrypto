@@ -66,6 +66,6 @@ def discoverLibrary():
     for path in discoverPaths():
         try:
             return ctypes.CDLL(path)
-        except Exception as e:
-            print(e, path)
+        except Exception:
+            pass
     return None
