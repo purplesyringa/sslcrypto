@@ -9,11 +9,11 @@ lib = None
 def init():
     global aes, ecc, rsa
 
-    # Initialize functions
-    lib.SSLeay_version.restype = ctypes.c_char_p
-
     # Initialize internal state
-    lib.OPENSSL_add_all_algorithms_conf()
+    try:
+        lib.OPENSSL_add_all_algorithms_conf()
+    except AttributeError:
+        pass
 
     aes = AES()
     ecc = ECC(ECCBackend())
@@ -29,10 +29,16 @@ class AES:
     )
 
     def __init__(self):
-        # 1 KiB ought to be enough for everybody. We don't know the real size of
-        # the context buffer because we are unsure about padding and pointer
-        # size
-        self.ctx = ctypes.create_string_buffer(1024)
+        self.is_supported_evp_cipher_ctx_new = hasattr(lib, "EVP_CIPHER_CTX_new")
+        self.is_supported_evp_cipher_ctx_reset = hasattr(lib, "EVP_CIPHER_CTX_reset")
+
+        if self.is_supported_evp_cipher_ctx_new:
+            self.ctx = lib.EVP_CIPHER_CTX_new()
+        else:
+            # 1 KiB ought to be enough for everybody. We don't know the real
+            # size of the context buffer because we are unsure about padding and
+            # pointer size
+            self.ctx = ctypes.create_string_buffer(1024)
 
 
     def _get_cipher(self, algo):
@@ -46,7 +52,8 @@ class AES:
 
     def encrypt(self, data, key, algo="aes-256-cbc"):
         # Initialize context
-        lib.EVP_CIPHER_CTX_init(self.ctx)
+        if not self.is_supported_evp_cipher_ctx_new:
+            lib.EVP_CIPHER_CTX_init(self.ctx)
         try:
             lib.EVP_CipherInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
 
@@ -78,12 +85,16 @@ class AES:
             ciphertext = output[:output_len.value + output_len2.value]
             return ciphertext, iv
         finally:
-            lib.EVP_CIPHER_CTX_cleanup(self.ctx)
+            if self.is_supported_evp_cipher_ctx_reset:
+                lib.EVP_CIPHER_CTX_reset(self.ctx)
+            else:
+                lib.EVP_CIPHER_CTX_cleanup(self.ctx)
 
 
     def decrypt(self, ciphertext, iv, key, algo="aes-256-cbc"):
         # Initialize context
-        lib.EVP_CIPHER_CTX_init(self.ctx)
+        if not self.is_supported_evp_cipher_ctx_new:
+            lib.EVP_CIPHER_CTX_init(self.ctx)
         try:
             lib.EVP_DecryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
 
@@ -119,7 +130,10 @@ class AES:
 
             return output[:output_len.value + output_len2.value]
         finally:
-            lib.EVP_CIPHER_CTX_cleanup(self.ctx)
+            if self.is_supported_evp_cipher_ctx_reset:
+                lib.EVP_CIPHER_CTX_reset(self.ctx)
+            else:
+                lib.EVP_CIPHER_CTX_cleanup(self.ctx)
 
 
 
