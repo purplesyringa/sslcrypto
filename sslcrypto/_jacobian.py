@@ -36,6 +36,7 @@ class JacobianCurve:
         self.a = a
         self.b = b
         self.g = g
+        self.n_length = len(bin(self.n).replace("0b", ""))
 
 
     def inv(self, a, n):
@@ -114,9 +115,37 @@ class JacobianCurve:
             return self.jacobian_add(half_sq, a)
 
 
+    def jacobian_shamir(self, a, n, b, m):
+        ab = self.jacobian_add(a, b)
+        if n < 0 or n >= self.n:
+            n %= self.n
+        if m < 0 or m >= self.n:
+            m %= self.n
+        res = 0, 0, 1  # point on infinity
+        for i in range(self.n_length - 1, -1, -1):
+            res = self.jacobian_double(res)
+            has_n = n & (1 << i)
+            has_m = m & (1 << i)
+            if has_n:
+                if has_m == 0:
+                    res = self.jacobian_add(res, a)
+                if has_m != 0:
+                    res = self.jacobian_add(res, ab)
+            else:
+                if has_m == 0:
+                    res = self.jacobian_add(res, (0, 0, 1))  # Try not to leak
+                if has_m != 0:
+                    res = self.jacobian_add(res, b)
+        return res
+
+
     def fast_multiply(self, a, n):
         return self.from_jacobian(self.jacobian_multiply(self.to_jacobian(a), n))
 
 
     def fast_add(self, a, b):
         return self.from_jacobian(self.jacobian_add(self.to_jacobian(a), self.to_jacobian(b)))
+
+
+    def fast_shamir(self, a, n, b, m):
+        return self.from_jacobian(self.jacobian_shamir(self.to_jacobian(a), n, self.to_jacobian(b), m))

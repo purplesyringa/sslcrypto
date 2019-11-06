@@ -338,10 +338,7 @@ class ECCBackend:
                 # Fix Ry sign
                 ry = self.p - ry
 
-            x, y = self.jacobian.fast_add(
-                self.jacobian.fast_multiply(self.g, u1),
-                self.jacobian.fast_multiply((rx, ry), u2)
-            )
+            x, y = self.jacobian.fast_shamir(self.g, u1, (rx, ry), u2)
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
