@@ -100,18 +100,26 @@ class JacobianCurve:
         return (p[0] * z ** 2) % self.p, (p[1] * z ** 3) % self.p
 
 
-    def jacobian_multiply(self, a, n):
+    def jacobian_multiply(self, a, n, secret=False):
         if a[1] == 0 or n == 0:
             return 0, 0, 1
         if n == 1:
             return a
         if n < 0 or n >= self.n:
-            return self.jacobian_multiply(a, n % self.n)
-        half = self.jacobian_multiply(a, n // 2)
+            return self.jacobian_multiply(a, n % self.n, secret)
+        half = self.jacobian_multiply(a, n // 2, secret)
         half_sq = self.jacobian_double(half)
-        if n % 2 == 0:
-            return half_sq
-        if n % 2 == 1:
+        if secret:
+            # A constant-time implementation
+            half_sq_a = self.jacobian_add(half_sq, a)
+            if n % 2 == 0:
+                result = half_sq
+            if n % 2 == 1:
+                result = half_sq_a
+            return result
+        else:
+            if n % 2 == 0:
+                return half_sq
             return self.jacobian_add(half_sq, a)
 
 
@@ -139,8 +147,8 @@ class JacobianCurve:
         return res
 
 
-    def fast_multiply(self, a, n):
-        return self.from_jacobian(self.jacobian_multiply(self.to_jacobian(a), n))
+    def fast_multiply(self, a, n, secret=False):
+        return self.from_jacobian(self.jacobian_multiply(self.to_jacobian(a), n, secret))
 
 
     def fast_add(self, a, b):

@@ -340,7 +340,7 @@ class ECCBackend:
             x, y = public_key
             x, y = self._bytes_to_int(x), self._bytes_to_int(y)
             private_key = self._bytes_to_int(private_key)
-            x, _ = self.jacobian.fast_multiply((x, y), private_key)
+            x, _ = self.jacobian.fast_multiply((x, y), private_key, secret=True)
             return self._int_to_bytes(x)
 
 
@@ -391,7 +391,7 @@ class ECCBackend:
                     k = kt
                 else:
                     k = ks
-                px, py = self.jacobian.fast_multiply(self.g, k)
+                px, py = self.jacobian.fast_multiply(self.g, k, secret=True)
 
                 r = px % self.n
                 if r == 0:
