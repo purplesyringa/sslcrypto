@@ -24,12 +24,12 @@ def init():
     lib.BN_new.restype = ctypes.POINTER(ctypes.c_char)
     lib.BN_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
     lib.EC_GROUP_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
-    lib.EC_KEY_new_by_curve_name = ctypes.POINTER(ctypes.c_char)
-    lib.EC_POINT_new = ctypes.POINTER(ctypes.c_char)
-    lib.EC_KEY_get0_private_key = ctypes.POINTER(ctypes.c_char)
-    lib.EVP_PKEY_new = ctypes.POINTER(ctypes.c_char)
+    lib.EC_KEY_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
+    lib.EC_POINT_new.restype = ctypes.POINTER(ctypes.c_char)
+    lib.EC_KEY_get0_private_key.restype = ctypes.POINTER(ctypes.c_char)
+    lib.EVP_PKEY_new.restype = ctypes.POINTER(ctypes.c_char)
     try:
-        lib.EVP_PKEY_CTX_new = ctypes.POINTER(ctypes.c_char)
+        lib.EVP_PKEY_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
     except AttributeError:
         pass
 
