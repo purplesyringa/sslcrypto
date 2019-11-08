@@ -15,6 +15,24 @@ def init():
     except AttributeError:
         pass
 
+    # Initialize functions
+    try:
+        lib.EVP_CIPHER_CTX_new.restype = ctypes.c_void_p
+    except AttributeError:
+        pass
+    lib.EVP_get_cipherbyname.restype = ctypes.c_void_p
+    lib.BN_new.restype = ctypes.c_void_p
+    lib.BN_CTX_new.restype = ctypes.c_void_p
+    lib.EC_GROUP_new_by_curve_name.restype = ctypes.c_void_p
+    lib.EC_KEY_new_by_curve_name = ctypes.c_void_p
+    lib.EC_POINT_new = ctypes.c_void_p
+    lib.EC_KEY_get0_private_key = ctypes.c_void_p
+    lib.EVP_PKEY_new = ctypes.c_void_p
+    try:
+        lib.EVP_PKEY_CTX_new = ctypes.c_void_p
+    except AttributeError:
+        pass
+
     aes = AES()
     ecc = ECC(ECCBackend())
     rsa = RSA()
