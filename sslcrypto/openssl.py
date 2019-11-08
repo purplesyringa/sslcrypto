@@ -17,19 +17,19 @@ def init():
 
     # Initialize functions
     try:
-        lib.EVP_CIPHER_CTX_new.restype = ctypes.c_void_p
+        lib.EVP_CIPHER_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
     except AttributeError:
         pass
-    lib.EVP_get_cipherbyname.restype = ctypes.c_void_p
-    lib.BN_new.restype = ctypes.c_void_p
-    lib.BN_CTX_new.restype = ctypes.c_void_p
-    lib.EC_GROUP_new_by_curve_name.restype = ctypes.c_void_p
-    lib.EC_KEY_new_by_curve_name = ctypes.c_void_p
-    lib.EC_POINT_new = ctypes.c_void_p
-    lib.EC_KEY_get0_private_key = ctypes.c_void_p
-    lib.EVP_PKEY_new = ctypes.c_void_p
+    lib.EVP_get_cipherbyname.restype = ctypes.POINTER(ctypes.c_char)
+    lib.BN_new.restype = ctypes.POINTER(ctypes.c_char)
+    lib.BN_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
+    lib.EC_GROUP_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
+    lib.EC_KEY_new_by_curve_name = ctypes.POINTER(ctypes.c_char)
+    lib.EC_POINT_new = ctypes.POINTER(ctypes.c_char)
+    lib.EC_KEY_get0_private_key = ctypes.POINTER(ctypes.c_char)
+    lib.EVP_PKEY_new = ctypes.POINTER(ctypes.c_char)
     try:
-        lib.EVP_PKEY_CTX_new = ctypes.c_void_p
+        lib.EVP_PKEY_CTX_new = ctypes.POINTER(ctypes.c_char)
     except AttributeError:
         pass
 
