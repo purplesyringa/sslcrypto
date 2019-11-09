@@ -22,6 +22,7 @@ def init():
         pass
     lib.EVP_get_cipherbyname.restype = ctypes.POINTER(ctypes.c_char)
     lib.BN_new.restype = ctypes.POINTER(ctypes.c_char)
+    lib.BN_bin2bn.restype = ctypes.POINTER(ctypes.c_char)
     lib.BN_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
     lib.EC_GROUP_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
     lib.EC_KEY_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
