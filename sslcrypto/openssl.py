@@ -48,6 +48,8 @@ class AES:
     )
 
     def __init__(self):
+        self.lib = lib  # For finalizer
+
         self.is_supported_evp_cipher_ctx_new = hasattr(lib, "EVP_CIPHER_CTX_new")
         self.is_supported_evp_cipher_ctx_reset = hasattr(lib, "EVP_CIPHER_CTX_reset")
 
@@ -58,6 +60,11 @@ class AES:
             # size of the context buffer because we are unsure about padding and
             # pointer size
             self.ctx = ctypes.create_string_buffer(1024)
+
+
+    def __del__(self):
+        if self.is_supported_evp_cipher_ctx_new:
+            self.lib.EVP_CIPHER_CTX_free(self.xtx)
 
 
     def _get_cipher(self, algo):
