@@ -74,7 +74,7 @@ class AES:
         if not self.is_supported_evp_cipher_ctx_new:
             lib.EVP_CIPHER_CTX_init(self.ctx)
         try:
-            lib.EVP_CipherInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
+            lib.EVP_EncryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
 
             # Make sure key length is correct
             key_length = lib.EVP_CIPHER_CTX_key_length(self.ctx)
@@ -86,7 +86,7 @@ class AES:
             iv = os.urandom(iv_length)
 
             # Set key and IV
-            lib.EVP_CipherInit_ex(self.ctx, None, None, key, iv)
+            lib.EVP_EncryptInit_ex(self.ctx, None, None, key, iv)
 
             # Actually encrypt
             block_size = lib.EVP_CIPHER_CTX_block_size(self.ctx)
