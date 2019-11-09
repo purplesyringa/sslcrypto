@@ -64,7 +64,7 @@ class AES:
 
     def __del__(self):
         if self.is_supported_evp_cipher_ctx_new:
-            self.lib.EVP_CIPHER_CTX_free(self.xtx)
+            self.lib.EVP_CIPHER_CTX_free(self.ctx)
 
 
     def _get_cipher(self, algo):
