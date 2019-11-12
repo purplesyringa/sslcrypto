@@ -20,6 +20,11 @@ class AES:
         return int(key_length) // 8, type
 
 
+    def new_key(self, algo="aes-256-cbc"):
+        key_length, _ = self._parseAlgoName(algo)
+        return os.urandom(key_length)
+
+
     def encrypt(self, data, key, algo="aes-256-cbc"):
         key_length, type = self._parseAlgoName(algo)
         if len(key) != key_length:

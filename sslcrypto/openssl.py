@@ -76,6 +76,26 @@ class AES:
         return cipher
 
 
+    def new_key(self, algo="aes-256-cbc"):
+        # Initialize context
+        if not self.is_supported_evp_cipher_ctx_new:
+            lib.EVP_CIPHER_CTX_init(self.ctx)
+        try:
+            # Get key length
+            lib.EVP_EncryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
+            key_length = lib.EVP_CIPHER_CTX_key_length(self.ctx)
+
+            # Generate key
+            key = ctypes.create_string_buffer(key_length)
+            lib.RAND_bytes(key, key_length)
+            return bytes(key)
+        finally:
+            if self.is_supported_evp_cipher_ctx_reset:
+                lib.EVP_CIPHER_CTX_reset(self.ctx)
+            else:
+                lib.EVP_CIPHER_CTX_cleanup(self.ctx)
+
+
     def encrypt(self, data, key, algo="aes-256-cbc"):
         # Initialize context
         if not self.is_supported_evp_cipher_ctx_new:
