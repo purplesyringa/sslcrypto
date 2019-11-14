@@ -477,6 +477,52 @@ class ECCBackend:
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
+        def verify(self, signature, data, public_key, hash):
+            if callable(hash):
+                subject = hash(data)
+            elif hash == "sha256":
+                h = hashlib.sha256()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha512":
+                h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash is None:
+                # *Highly* unrecommended. Only use this if the input is very
+                # small
+                subject = data
+            else:
+                raise ValueError("Unsupported hash function")
+
+            r = self._bytes_to_int(signature[:self.public_key_length])
+            s = self._bytes_to_int(signature[self.public_key_length:])
+
+            # Verify bounds
+            if r >= self.n:
+                raise ValueError("r is out of bounds")
+            if s >= self.n:
+                raise ValueError("s is out of bounds")
+
+            public_key = [self._bytes_to_int(c) for c in public_key]
+
+            # Ensure that the public key is correct
+            if not self.jacobian.is_on_curve(public_key):
+                raise ValueError("Public key is not on curve")
+
+            z = self._subject_to_int(subject)
+
+            sinv = self.jacobian.inv(s, self.n)
+            u1 = (z * sinv) % self.n
+            u2 = (r * sinv) % self.n
+
+            x1, y1 = self.jacobian.fast_shamir(self.g, u1, public_key, u2)
+            if r != x1:
+                raise ValueError("Invalid signature")
+
+            return True
+
+
 class RSA:
     pass
 

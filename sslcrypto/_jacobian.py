@@ -157,3 +157,12 @@ class JacobianCurve:
 
     def fast_shamir(self, a, n, b, m):
         return self.from_jacobian(self.jacobian_shamir(self.to_jacobian(a), n, self.to_jacobian(b), m))
+
+
+    def is_on_curve(self, a):
+        x, y = a
+        # Simple arithmetic check
+        if (pow(x, 3, self.p) + self.a * x + self.b) % self.p != y * y % self.p:
+            return False
+        # nP = point-at-infinity
+        return self.isinf(self.jacobian_multiply(self.to_jacobian(a), self.n))

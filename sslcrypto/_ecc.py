@@ -206,3 +206,14 @@ class EllipticCurve:
             raise ValueError("Cannot recover an unrecoverable signature")
         x, y = self._backend.recover(signature, data, hash)
         return self._encode_public_key(x, y)
+
+
+    def verify(self, signature, data, public_key, hash="sha256"):
+        if len(signature) == 1 + 2 * self._backend.public_key_length:
+            # Recoverable signature
+            signature = signature[1:]
+        if len(signature) != 2 * self._backend.public_key_length:
+            raise ValueError("Invalid signature format")
+        if not isinstance(public_key, tuple):
+            public_key = self._decode_public_key(public_key)
+        return self._backend.verify(signature, data, public_key, hash)
