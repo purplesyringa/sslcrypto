@@ -3,6 +3,19 @@ import hashlib
 import hmac
 
 
+try:
+    hashlib.new("ripemd160")
+except Exception:
+    # No native implementation
+    from . import _ripemd
+    def ripemd160(*args):
+        return _ripemd.new(*args)
+else:
+    # Use OpenSSL
+    def ripemd160(*args):
+        return hashlib.new("ripemd160", *args)
+
+
 class ECC:
     CURVES = (
         "secp112r1", "secp112r2",
@@ -104,6 +117,24 @@ class EllipticCurve:
         if h[:4] != checksum:
             raise ValueError("Invalid checksum")
         return private_key
+
+
+    def public_to_address(self, public_key):
+        # Decompress public key
+        public_key = b"\x04" + b"".join(self._decode_public_key(public_key))
+        # Calculate hash160
+        h = hashlib.sha256(public_key).digest()
+        hash160 = ripemd160(h).digest()
+        # Add checksum
+        h = hashlib.sha256(b"\x00" + hash160).digest()
+        h = hashlib.sha256(h).digest()
+        checksum = h[:4]
+        return base58check.b58encode(b"\x00" + hash160 + checksum)
+
+
+    def private_to_address(self, private_key):
+        # Kinda useless but left for quick migration from pybitcointools
+        return self.public_to_address(self.private_to_public(private_key))
 
 
     def derive(self, private_key, public_key):
