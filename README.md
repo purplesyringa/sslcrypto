@@ -154,3 +154,14 @@ signature = curve.sign(data, private_key, recoverable=True)
 # Recover public key
 assert curve.recover(signature, data) == public_key  # Would raise on error
 ```
+
+
+### Bitcoin-related functions
+
+```python
+import sslcrypto
+curve = sslcrypto.ecc.get_curve("secp256k1")
+private_key = curve.new_private_key()
+wif = curve.private_to_wif(private_key)  # Transform to mainnet private key
+assert curve.wif_to_private(wif) == private_key
+```
