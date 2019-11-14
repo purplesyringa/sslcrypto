@@ -705,5 +705,61 @@ class ECCBackend:
                 lib.EC_POINT_free(rp)
 
 
+        def verify(self, signature, data, public_key, hash):
+            if callable(hash):
+                subject = hash(data)
+            elif hash == "sha256":
+                h = hashlib.sha256()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha512":
+                h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash is None:
+                # *Highly* unrecommended. Only use this if the input is very
+                # small
+                subject = data
+            else:
+                raise ValueError("Unsupported hash function")
+
+            r_raw = signature[:self.public_key_length]
+            r = BN(r_raw)
+            s = BN(signature[self.public_key_length:])
+            if r >= self.order:
+                raise ValueError("r is out of bounds")
+            if s >= self.order:
+                raise ValueError("s is out of bounds")
+
+            z = self._subject_to_bn(subject)
+
+            pub_p = lib.EC_POINT_new(self.group)
+            if not pub_p:
+                raise ValueError("Could not create public key point")
+            try:
+                init_buf = b"\x04" + public_key[0] + public_key[1]
+                if not lib.EC_POINT_oct2point(self.group, pub_p, init_buf, len(init_buf), None):
+                    raise ValueError("Could initialize point")
+
+                sinv = s.inverse(self.order)
+                u1 = (z * sinv) % self.order
+                u2 = (r * sinv) % self.order
+
+                # Recover public key
+                result = lib.EC_POINT_new(self.group)
+                if not result:
+                    raise ValueError("Could not create point")
+                try:
+                    if not lib.EC_POINT_mul(self.group, result, u1.bn, pub_p, u2.bn, None):
+                        raise ValueError("Could not recover public key")
+                    if self._point_to_affine(result)[0] != r_raw:
+                        raise ValueError("Invalid signature")
+                    return True
+                finally:
+                    lib.EC_POINT_free(result)
+            finally:
+                lib.EC_POINT_free(pub_p)
+
+
 class RSA:
     pass
