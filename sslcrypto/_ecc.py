@@ -4,6 +4,7 @@ import hmac
 
 class ECC:
     CURVES = (
+        "ed25519",
         "secp112r1", "secp112r2",
         "secp128r1", "secp128r2",
         "secp160k1", "secp160r1", "secp160r2",
