@@ -127,8 +127,30 @@ public_key = curve.private_to_public(private_key)
 
 # Sign something
 data = b"Hello, world!"
+signature = curve.sign(data, private_key)
+
+# Verify
+assert curve.verify(signature, data, public_key) == True  # Would raise on error
+```
+
+Additionally, you can create recoverable signatures:
+
+```python
+import sslcrypto
+
+# Create curve object
+curve = sslcrypto.ecc.get_curve("secp256k1")
+
+# Generate private key
+private_key = curve.new_private_key()
+
+# Find a matching public key
+public_key = curve.private_to_public(private_key)
+
+# Sign something
+data = b"Hello, world!"
 signature = curve.sign(data, private_key, recoverable=True)
 
-# Recover signature
-assert curve.recover(signature, data) == public_key
+# Recover public key
+assert curve.recover(signature, data) == public_key  # Would raise on error
 ```
