@@ -11,6 +11,7 @@ setup(
     url="https://github.com/imachug/sslcrypto",
     packages=["sslcrypto"],
     install_requires=[
-        "pyaes==1.6.1"
+        "pyaes==1.6.1",
+        "base58check==1.0.2"
     ]
 )

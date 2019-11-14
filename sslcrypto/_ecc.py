@@ -1,3 +1,4 @@
+import base58check
 import hashlib
 import hmac
 
@@ -82,6 +83,27 @@ class EllipticCurve:
     def private_to_public(self, private_key):
         x, y = self._backend.private_to_public(private_key)
         return self._encode_public_key(x, y)
+
+
+    def private_to_wif(self, private_key):
+        h = hashlib.sha256(b"\x80" + private_key).digest()
+        h = hashlib.sha256(h).digest()
+        checksum = h[:4]
+        return base58check.b58encode(b"\x80" + private_key + checksum)
+
+
+    def wif_to_private(self, wif):
+        dec = base58check.b58decode(wif)
+        if dec[0] != 0x80:
+            raise ValueError("Invalid network (expected mainnet)")
+        private_key = dec[1:-4]
+        checksum = dec[-4:]
+        # Compare checksum
+        h = hashlib.sha256(b"\x80" + private_key).digest()
+        h = hashlib.sha256(h).digest()
+        if h[:4] != checksum:
+            raise ValueError("Invalid checksum")
+        return private_key
 
 
     def derive(self, private_key, public_key):
