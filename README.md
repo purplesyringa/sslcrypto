@@ -162,6 +162,7 @@ assert curve.recover(signature, data) == public_key  # Would raise on error
 import sslcrypto
 curve = sslcrypto.ecc.get_curve("secp256k1")
 private_key = curve.new_private_key()
+public_key = curve.private_to_public(private_key)
 
 wif = curve.private_to_wif(private_key)  # Transform to mainnet private key
 assert curve.wif_to_private(wif) == private_key
