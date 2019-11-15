@@ -387,6 +387,10 @@ class ECCBackend:
                 h = hashlib.sha512()
                 h.update(data)
                 subject = h.digest()
+            elif hash == "sha1":
+                h = hashlib.sha1()
+                h.update(data)
+                subject = h.digest()
             elif hash is None:
                 # *Highly* unrecommended. Only use this if the input is very
                 # small
@@ -459,6 +463,10 @@ class ECCBackend:
                 subject = h.digest()
             elif hash == "sha512":
                 h = hashlib.sha512()
+                h.update(data)
+                subject = h.digest()
+            elif hash == "sha1":
+                h = hashlib.sha1()
                 h.update(data)
                 subject = h.digest()
             elif hash is None:
