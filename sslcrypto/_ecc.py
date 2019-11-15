@@ -21,9 +21,9 @@ class ECC:
         "secp112r1", "secp112r2",
         "secp128r1", "secp128r2",
         "secp160k1", "secp160r1", "secp160r2",
-        "secp192k1",
+        "secp192k1", "prime192v1",
         "secp224k1", "secp224r1",
-        "secp256k1",
+        "secp256k1", "prime256v1",
         "secp384r1",
         "secp521r1"
     )
