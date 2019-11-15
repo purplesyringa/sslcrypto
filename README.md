@@ -1,5 +1,7 @@
 # sslcrypto
 
+[![Actions Status](https://github.com/imachug/sslcrypto/workflows/tests/badge.svg)](https://github.com/imachug/sslcrypto/actions)
+
 **sslcrypto** is a fast and simple library for AES, ECIES and ECDSA for Python.
 
 License: MIT.
