@@ -376,7 +376,7 @@ class ECCBackend:
             return self._bytes_to_int(subject)
 
 
-        def sign(self, data, private_key, hash, recoverable):
+        def sign(self, data, private_key, hash, recoverable, entropy):
             if callable(hash):
                 subject = hash(data)
             elif hash == "sha256":
@@ -394,18 +394,29 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
+            print(subject)
             z = self._subject_to_int(subject)
 
             private_key = self._bytes_to_int(private_key)
 
-            # Generate k deterministically from data
-            h = hashlib.sha512()
-            h.update(data)
-            h.update(b"\x00")
-            h.update(str(time.time()).encode())
-            k = self._bytes_to_int(h.digest()) % self.n
+            if entropy is None:
+                # Generate k deterministically from data
+                def generate_k():
+                    h = hashlib.sha512()
+                    h.update(data)
+                    h.update(b"\x00")
+                    h.update(str(time.time()).encode())
+                    k = self._bytes_to_int(h.digest()) % self.n
+                    while True:
+                        yield k
+                        k += 1
+            else:
+                # Use static k
+                def generate_k():
+                    yield self._bytes_to_int(entropy)
+                    raise ValueError("Invalid k")
 
-            while True:
+            for k in generate_k():
                 # Fix k length to prevent Minerva. Increasing multiplier by a
                 # multiple of order doesn't break anything. This fix was ported
                 # from python-ecdsa
@@ -421,14 +432,12 @@ class ECCBackend:
 
                 r = px % self.n
                 if r == 0:
-                    # Invalid k, try increasing it
-                    k = (k + 1) % self.n
+                    # Invalid k
                     continue
 
                 s = (self.jacobian.inv(k, self.n) * (z + (private_key * r))) % self.n
                 if s == 0:
-                    # Invalid k, try increasing it
-                    k = (k + 1) % self.n
+                    # Invalid k
                     continue
 
                 rs_bus = self._int_to_bytes(r) + self._int_to_bytes(s)

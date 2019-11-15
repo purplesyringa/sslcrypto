@@ -560,7 +560,7 @@ class ECCBackend:
             return BN(subject)
 
 
-        def sign(self, data, private_key, hash, recoverable):
+        def sign(self, data, private_key, hash, recoverable, entropy):
             if callable(hash):
                 subject = hash(data)
             elif hash == "sha256":
@@ -582,56 +582,64 @@ class ECCBackend:
 
             private_key = BN(private_key)
 
-            eckey = lib.EC_KEY_new_by_curve_name(self.nid)
-            if not eckey:
-                raise ValueError("Could not create EC_KEY")
-
-            try:
-                while True:
-                    # Generate k randomly. We abuse EC_KEY_generate_key behavior
-                    # here: whilst k is not a real private key, it has the same
-                    # domain
-                    if not lib.EC_KEY_generate_key(eckey):
-                        raise ValueError("Could not generate EC_KEY")
-                    k = BN.link(lib.EC_KEY_get0_private_key(eckey))
-                    rp = lib.EC_POINT_new(self.group)
+            if entropy is None:
+                # Generate k randomly. We abuse EC_KEY_generate_key behavior
+                # here: whilst k is not a real private key, it has the same
+                # domain
+                def generate_k():
+                    eckey = lib.EC_KEY_new_by_curve_name(self.nid)
+                    if not eckey:
+                        raise ValueError("Could not create EC_KEY")
                     try:
-                        # Fix Minerva
-                        k1 = k + self.order
-                        k2 = k1 + self.order
-                        if len(k1) == len(k2):
-                            k = k2
-                        else:
-                            k = k1
-                        if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
-                            raise ValueError("Could not generate R")
-                        # Convert to affine coordinates
-                        rx = BN()
-                        ry = BN()
-                        if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
-                            raise ValueError("Failed to convert R to affine coordinates")
-                        r = rx % self.order
-                        if r == BN(0):
-                            continue
-                        # Calculate s = k^-1 * (z + r * private_key) mod n
-                        s = (k.inverse(self.order) * (z + r * private_key)) % self.order
-                        if s == BN(0):
-                            continue
-                        r_buf = r.bytes(self.public_key_length)
-                        s_buf = s.bytes(self.public_key_length)
-                        if recoverable:
-                            # Generate recid
-                            recid = (int(ry % BN(2)))
-                            # The line below is highly unlikely to matter in case of
-                            # secp256k1 but might make sense for other curves
-                            recid += 2 * int(rx // self.order)
-                            return bytes([31 + recid]) + r_buf + s_buf
-                        else:
-                            return r_buf + s_buf
+                        while True:
+                            if not lib.EC_KEY_generate_key(eckey):
+                                raise ValueError("Could not generate EC_KEY")
+                            yield BN.link(lib.EC_KEY_get0_private_key(eckey))
                     finally:
-                        lib.EC_POINT_free(rp)
-            finally:
-                lib.EC_KEY_free(eckey)
+                        lib.EC_KEY_free(eckey)
+            else:
+                # Use given entropy
+                def generate_k():
+                    yield BN(entropy)
+                    raise ValueError("Invalid k")
+
+            for k in generate_k():
+                rp = lib.EC_POINT_new(self.group)
+                try:
+                    # Fix Minerva
+                    k1 = k + self.order
+                    k2 = k1 + self.order
+                    if len(k1) == len(k2):
+                        k = k2
+                    else:
+                        k = k1
+                    if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
+                        raise ValueError("Could not generate R")
+                    # Convert to affine coordinates
+                    rx = BN()
+                    ry = BN()
+                    if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
+                        raise ValueError("Failed to convert R to affine coordinates")
+                    r = rx % self.order
+                    if r == BN(0):
+                        continue
+                    # Calculate s = k^-1 * (z + r * private_key) mod n
+                    s = (k.inverse(self.order) * (z + r * private_key)) % self.order
+                    if s == BN(0):
+                        continue
+                    r_buf = r.bytes(self.public_key_length)
+                    s_buf = s.bytes(self.public_key_length)
+                    if recoverable:
+                        # Generate recid
+                        recid = (int(ry % BN(2)))
+                        # The line below is highly unlikely to matter in case of
+                        # secp256k1 but might make sense for other curves
+                        recid += 2 * int(rx // self.order)
+                        return bytes([31 + recid]) + r_buf + s_buf
+                    else:
+                        return r_buf + s_buf
+                finally:
+                    lib.EC_POINT_free(rp)
 
 
         def recover(self, signature, data, hash):

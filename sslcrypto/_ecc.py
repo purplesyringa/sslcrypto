@@ -249,8 +249,8 @@ class EllipticCurve:
         return self._backend.aes.decrypt(ciphertext, iv, k_enc)
 
 
-    def sign(self, data, private_key, hash="sha256", recoverable=False):
-        return self._backend.sign(data, private_key, hash, recoverable)
+    def sign(self, data, private_key, hash="sha256", recoverable=False, entropy=None):
+        return self._backend.sign(data, private_key, hash, recoverable, entropy)
 
 
     def recover(self, signature, data, hash="sha256"):
