@@ -353,9 +353,11 @@ class ECCBackend:
         "secp160r1": 709,
         "secp160r2": 710,
         "secp192k1": 711,
+        "prime192v1": 409,
         "secp224k1": 712,
         "secp224r1": 713,
         "secp256k1": 714,
+        "prime256v1": 415,
         "secp384r1": 715,
         "secp521r1": 716
     }
