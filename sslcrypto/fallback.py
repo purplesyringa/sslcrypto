@@ -1,6 +1,7 @@
 import hashlib
 import pyaes
 import time
+import hmac
 import os
 from ._jacobian import JacobianCurve
 from ._ecc import ECC
@@ -243,9 +244,9 @@ class ECCBackend:
             self.order_bitlength = len(bin(self.n).replace("0b", ""))
 
 
-        def _int_to_bytes(self, raw):
+        def _int_to_bytes(self, raw, len=None):
             data = []
-            for _ in range(self.public_key_length):
+            for _ in range(len or self.public_key_length):
                 data.append(raw % 256)
                 raw //= 256
             return bytes(data[::-1])
@@ -521,6 +522,22 @@ class ECCBackend:
                 raise ValueError("Invalid signature")
 
             return True
+
+
+        def derive_child(self, seed, child):
+            # Round 1
+            h = hmac.new(key=b"Bitcoin seed", msg=seed, digestmod="sha512").digest()
+            private_key1 = h[:32]
+            x, y = self.private_to_public(private_key1)
+            public_key1 = bytes([0x02 + (y[-1] % 2)]) + x
+            private_key1 = self._bytes_to_int(private_key1)
+
+            # Round 2
+            msg = public_key1 + self._int_to_bytes(child, 4)
+            h = hmac.new(key=h[32:], msg=msg, digestmod="sha512").digest()
+            private_key2 = self._bytes_to_int(h[:32])
+
+            return self._int_to_bytes((private_key1 + private_key2) % self.n)
 
 
 class RSA:

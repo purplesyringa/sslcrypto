@@ -270,3 +270,10 @@ class EllipticCurve:
         if not isinstance(public_key, tuple):
             public_key = self._decode_public_key(public_key)
         return self._backend.verify(signature, data, public_key, hash)
+
+
+    def derive_child(self, seed, child):
+        # Based on BIP32
+        if not (0 <= child < 2 ** 31):
+            raise ValueError("Invalid child index")
+        return self._backend.derive_child(seed, child)
