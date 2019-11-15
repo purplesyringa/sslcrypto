@@ -557,9 +557,7 @@ class ECCBackend:
 
 
         def _subject_to_bn(self, subject):
-            subject = (b"\x00" + subject)[-len(self.order) // 8 - 1:]
-            subject = bytes([subject[0] % (2 ** (len(self.order) % 8))]) + subject[1:]
-            return BN(subject)
+            return BN(subject[:(len(self.order) + 7) // 8])
 
 
         def sign(self, data, private_key, hash, recoverable, entropy):

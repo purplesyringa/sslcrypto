@@ -371,9 +371,7 @@ class ECCBackend:
 
 
         def _subject_to_int(self, subject):
-            subject = (b"\x00" + subject)[-self.order_bitlength // 8 - 1:]
-            subject = bytes([subject[0] % (2 ** (self.order_bitlength % 8))]) + subject[1:]
-            return self._bytes_to_int(subject)
+            return self._bytes_to_int(subject[:(self.order_bitlength + 7) // 8])
 
 
         def sign(self, data, private_key, hash, recoverable, entropy):
