@@ -761,5 +761,26 @@ class ECCBackend:
                 lib.EC_POINT_free(pub_p)
 
 
+        def derive_child(self, seed, child):
+            # Round 1
+            h = hmac.new(key=b"Bitcoin seed", msg=seed, digestmod="sha512").digest()
+            private_key1 = h[:32]
+            x, y = self.private_to_public(private_key1)
+            public_key1 = bytes([0x02 + (y[-1] % 2)]) + x
+            private_key1 = BN(private_key1)
+
+            # Round 2
+            child_bytes = []
+            for _ in range(4):
+                child_bytes.append(child & 255)
+                child >>= 8
+            child_bytes = bytes(child_bytes[::-1])
+            msg = public_key1 + child_bytes
+            h = hmac.new(key=h[32:], msg=msg, digestmod="sha512").digest()
+            private_key2 = BN(h[:32])
+
+            return ((private_key1 + private_key2) % self.order).bytes(self.public_key_length)
+
+
 class RSA:
     pass
