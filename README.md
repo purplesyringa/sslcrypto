@@ -170,3 +170,9 @@ assert curve.wif_to_private(wif) == private_key
 address = curve.private_to_address(private_key)
 assert address == curve.public_to_address(public_key)
 ```
+
+
+## Running tests
+
+sslcrypto uses pytest framework. Install it with pip and run `python3 -m pytest
+test` in sslcrypto repository.
