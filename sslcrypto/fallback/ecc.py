@@ -365,4 +365,4 @@ class ECCBackend:
             return self._int_to_bytes((private_key1 + private_key2) % self.n)
 
 
-ecc = ECC(ECCBackend())
+ecc = ECC(ECCBackend(), aes)

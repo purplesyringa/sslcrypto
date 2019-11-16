@@ -28,19 +28,21 @@ class ECC:
         "secp521r1"
     )
 
-    def __init__(self, backend):
+    def __init__(self, backend, aes):
         self._backend = backend
+        self._aes = aes
 
 
     def get_curve(self, name):
         if name not in self.CURVES or not self._backend.is_supported(name):
             raise ValueError("Unknown curve {}".format(name))
-        return EllipticCurve(self._backend, name)
+        return EllipticCurve(self._backend, self._aes, name)
 
 
 class EllipticCurve:
-    def __init__(self, backend, name):
+    def __init__(self, backend, aes, name):
         self._backend = backend.EllipticCurveBackend(name)
+        self._aes = aes
         self.name = name
 
 
@@ -169,7 +171,7 @@ class EllipticCurve:
         k_enc, k_mac = key[:32], key[32:]
 
         # Encrypt
-        ciphertext, iv = self._backend.aes.encrypt(data, k_enc, algo=algo)
+        ciphertext, iv = self._aes.encrypt(data, k_enc, algo=algo)
         ciphertext = iv + self.private_to_public(private_key) + ciphertext
 
         # Add MAC tag
@@ -239,7 +241,7 @@ class EllipticCurve:
         if not hmac.compare_digest(tag, expected_tag):
             raise ValueError("Invalid MAC tag")
 
-        return self._backend.aes.decrypt(ciphertext, iv, k_enc, algo=algo)
+        return self._aes.decrypt(ciphertext, iv, k_enc, algo=algo)
 
 
     def sign(self, data, private_key, hash="sha256", recoverable=False, entropy=None):

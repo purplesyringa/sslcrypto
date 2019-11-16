@@ -735,5 +735,5 @@ class RSA:
 
 
 aes = AES()
-ecc = ECC(ECCBackend())
+ecc = ECC(ECCBackend(), aes)
 rsa = RSA()
