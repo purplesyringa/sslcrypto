@@ -3,6 +3,7 @@
 [![Actions Status](https://github.com/imachug/sslcrypto/workflows/tests/badge.svg)](https://github.com/imachug/sslcrypto/actions)
 ![Code Quality](https://raw.githubusercontent.com/imachug/sslcrypto/gh-action/quality.svg?sanitize=true)
 ![Code Coverage](https://raw.githubusercontent.com/imachug/sslcrypto/gh-action/coverage.svg?sanitize=true)
+[![PyPI](https://img.shields.io/pypi/v/sslcrypto)](https://pypi.org/project/sslcrypto/)
 
 **sslcrypto** is a fast and simple library for AES, ECIES and ECDSA for Python.
 
