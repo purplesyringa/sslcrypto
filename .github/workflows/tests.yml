@@ -30,7 +30,7 @@ jobs:
       run: |
         pip install pylint pylint-exit shields
         pylint --output-format=parseable sslcrypto >output/lint-out.txt || pylint-exit $?
-        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | py -c "print(round(float(input()) * 10))")
+        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | python -c "print(round(float(input()) * 10))")
         curl https://img.shields.io/badge/quality-$(quality)%25-brightgreen.svg >quality.svg
         # Upload
         git config --local user.email "action@github.com"
