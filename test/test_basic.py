@@ -3,7 +3,20 @@ import sslcrypto
 import sslcrypto.fallback
 
 
-def _test(curve):
+curves, curve_ids = [], []
+for name in sslcrypto.ecc.CURVES:
+    # Pure-Python implementation
+    curves.append(sslcrypto.fallback.ecc.get_curve(name))
+    curve_ids.append("fallback-{}".format(name))
+
+    # Try testing native version as well
+    if sslcrypto.ecc is not sslcrypto.fallback.ecc:
+        curves.append(sslcrypto.ecc.get_curve(name))
+        curve_ids.append("native-{}".format(name))
+
+
+@pytest.mark.parametrize("curve", curves, ids=curve_ids)
+def test(curve):
     priv1 = curve.new_private_key()
     pub1 = curve.private_to_public(priv1)
     priv2 = curve.new_private_key()
@@ -54,18 +67,3 @@ def _test(curve):
         # Wrong data
         with pytest.raises(ValueError):
             curve.verify(signature, data2, pub1, hash=hash)
-
-
-# Show different curves as different testcases
-for name in sslcrypto.ecc.CURVES:
-    def _gen(name):  # Closure
-        # Pure-Python implementation
-        curve = sslcrypto.fallback.ecc.get_curve(name)
-        globals()["test_{}".format(name)] = lambda: _test(curve)
-
-        # Try testing native version as well
-        if sslcrypto.ecc is not sslcrypto.fallback.ecc:
-            native_curve = sslcrypto.ecc.get_curve(name)
-            globals()["test_native_{}".format(name)] = lambda: _test(native_curve)
-
-    _gen(name)
