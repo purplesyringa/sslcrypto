@@ -185,7 +185,7 @@ class EllipticCurve:
             h = hmac.new(k_mac, digestmod="sha512")
             h.update(ciphertext)
             tag = h.digest()
-        elif mac is False:
+        elif mac is None:
             tag = b""
         else:
             raise ValueError("Unsupported MAC")
@@ -201,7 +201,7 @@ class EllipticCurve:
             tag_length = hmac.new(b"", digestmod="sha256").digest_size
         elif mac == "hmac-sha512":
             tag_length = hmac.new(b"", digestmod="sha512").digest_size
-        elif mac is False:
+        elif mac is None:
             tag_length = 0
         else:
             raise ValueError("Unsupported MAC")
@@ -235,7 +235,7 @@ class EllipticCurve:
             h = hmac.new(k_mac, digestmod="sha512")
             h.update(orig_ciphertext)
             expected_tag = h.digest()
-        elif mac is False:
+        elif mac is None:
             expected_tag = b""
 
         if not hmac.compare_digest(tag, expected_tag):
