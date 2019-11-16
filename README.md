@@ -160,6 +160,29 @@ signature = curve.sign(data, private_key, recoverable=True)
 assert curve.recover(signature, data) == public_key  # Would raise on error
 ```
 
+By default, compressed public keys are generated and/or recovered from
+signatures. You can change this behavior.
+
+```python
+import sslcrypto
+
+# Create curve object
+curve = sslcrypto.ecc.get_curve("secp256k1")
+
+# Generate private key
+private_key = curve.new_private_key()
+
+# Find a matching public key
+public_key = curve.private_to_public(private_key, is_compressed=False)
+
+# Sign something
+data = b"Hello, world!"
+signature = curve.sign(data, private_key, is_compressed=False, recoverable=True)
+
+# Recover public key
+assert curve.recover(signature, data) == public_key
+```
+
 
 ### Bitcoin-related functions
 
@@ -174,6 +197,9 @@ assert curve.wif_to_private(wif) == private_key
 
 address = curve.private_to_address(private_key)
 assert address == curve.public_to_address(public_key)
+
+# Based on BIP32. Hardened indexes aren't supported yet
+curve.child_derive(private_key, 123)
 ```
 
 
