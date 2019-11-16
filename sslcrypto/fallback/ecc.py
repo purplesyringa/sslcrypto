@@ -221,37 +221,17 @@ class ECCBackend:
             return bytes_to_int(subject[:(self.order_bitlength + 7) // 8])
 
 
-        def sign(self, data, private_key, hash, recoverable, entropy):
-            if callable(hash):
-                subject = hash(data)
-            elif hash == "sha256":
-                h = hashlib.sha256()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha512":
-                h = hashlib.sha512()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha1":
-                h = hashlib.sha1()
-                h.update(data)
-                subject = h.digest()
-            elif hash is None:
-                # *Highly* unrecommended. Only use this if the input is very
-                # small
-                subject = data
-            else:
-                raise ValueError("Unsupported hash function")
-
+        def sign(self, subject, raw_private_key, recoverable, entropy):
             z = self._subject_to_int(subject)
 
-            private_key = bytes_to_int(private_key)
+            private_key = bytes_to_int(raw_private_key)
 
             if entropy is None:
                 # Generate k deterministically from data
                 def generate_k():
                     h = hashlib.sha512()
-                    h.update(data)
+                    h.update(subject)
+                    h.update(raw_private_key)
                     h.update(b"\x00")
                     h.update(str(time.time()).encode())
                     k = bytes_to_int(h.digest()) % self.n
@@ -298,27 +278,8 @@ class ECCBackend:
                     return rs_bus
 
 
-        def recover(self, signature, data, hash):
-            if callable(hash):
-                subject = hash(data)
-            elif hash == "sha256":
-                h = hashlib.sha256()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha512":
-                h = hashlib.sha512()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha1":
-                h = hashlib.sha1()
-                h.update(data)
-                subject = h.digest()
-            elif hash is None:
-                # *Highly* unrecommended. Only use this if the input is very
-                # small
-                subject = data
-            else:
-                raise ValueError("Unsupported hash function")
+        def recover(self, signature, subject):
+            z = self._subject_to_int(subject)
 
             recid = signature[0] - 27 if signature[0] < 31 else signature[0] - 31
             r = bytes_to_int(signature[1:self.public_key_length + 1])
@@ -331,8 +292,6 @@ class ECCBackend:
                 raise ValueError("r is out of bounds")
             if s >= self.n:
                 raise ValueError("s is out of bounds")
-
-            z = self._subject_to_int(subject)
 
             rinv = self.jacobian.inv(r, self.n)
             u1 = (-z * rinv) % self.n
@@ -359,23 +318,8 @@ class ECCBackend:
             return self._int_to_bytes(x), self._int_to_bytes(y)
 
 
-        def verify(self, signature, data, public_key, hash):
-            if callable(hash):
-                subject = hash(data)
-            elif hash == "sha256":
-                h = hashlib.sha256()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha512":
-                h = hashlib.sha512()
-                h.update(data)
-                subject = h.digest()
-            elif hash is None:
-                # *Highly* unrecommended. Only use this if the input is very
-                # small
-                subject = data
-            else:
-                raise ValueError("Unsupported hash function")
+        def verify(self, signature, subject, public_key):
+            z = self._subject_to_int(subject)
 
             r = bytes_to_int(signature[:self.public_key_length])
             s = bytes_to_int(signature[self.public_key_length:])
@@ -391,8 +335,6 @@ class ECCBackend:
             # Ensure that the public key is correct
             if not self.jacobian.is_on_curve(public_key):
                 raise ValueError("Public key is not on curve")
-
-            z = self._subject_to_int(subject)
 
             sinv = self.jacobian.inv(s, self.n)
             u1 = (z * sinv) % self.n

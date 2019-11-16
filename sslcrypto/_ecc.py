@@ -143,6 +143,21 @@ class EllipticCurve:
         return self._backend.ecdh(private_key, public_key)
 
 
+    def _digest(self, data, hash):
+        if hash is None:
+            return data
+        elif callable(hash):
+            return hash(data)
+        elif hash == "sha1":
+            return hashlib.sha1(data).digest()
+        elif hash == "sha256":
+            return hashlib.sha256(data).digest()
+        elif hash == "sha512":
+            return hashlib.sha512(data).digest()
+        else:
+            raise ValueError("Unknown hash/derivation method")
+
+
     # High-level functions
     def encrypt(self, data, public_key, algo="aes-256-cbc", derivation="sha256", mac="hmac-sha256"):
         # Generate ephemeral private key
@@ -150,18 +165,7 @@ class EllipticCurve:
 
         # Derive key
         ecdh = self.derive(private_key, public_key)
-        if callable(derivation):
-            key = derivation(ecdh)
-        elif derivation == "sha256":  # Most commonly used
-            hash = hashlib.sha256()
-            hash.update(ecdh)
-            key = hash.digest()
-        elif derivation == "sha512":  # Sometimes used as well
-            hash = hashlib.sha512()
-            hash.update(ecdh)
-            key = hash.digest()
-        else:
-            raise ValueError("Unsupported key derivation method")
+        key = self._digest(ecdh, derivation)
         k_enc, k_mac = key[:32], key[32:]
 
         # Encrypt
@@ -215,18 +219,7 @@ class EllipticCurve:
 
         # Derive key
         ecdh = self.derive(private_key, public_key)
-        if callable(derivation):
-            key = derivation(ecdh)
-        elif derivation == "sha256":  # Most commonly used
-            hash = hashlib.sha256()
-            hash.update(ecdh)
-            key = hash.digest()
-        elif derivation == "sha512":  # Sometimes used as well
-            hash = hashlib.sha512()
-            hash.update(ecdh)
-            key = hash.digest()
-        else:
-            raise ValueError("Unsupported key derivation method")
+        key = self._digest(ecdh, derivation)
         k_enc, k_mac = key[:32], key[32:]
 
         # Verify MAC tag
@@ -250,14 +243,14 @@ class EllipticCurve:
 
 
     def sign(self, data, private_key, hash="sha256", recoverable=False, entropy=None):
-        return self._backend.sign(data, private_key, hash, recoverable, entropy)
+        return self._backend.sign(self._digest(data, hash), private_key, recoverable, entropy)
 
 
     def recover(self, signature, data, hash="sha256"):
         # Sanity check: is this signature recoverable?
         if len(signature) != 1 + 2 * self._backend.public_key_length:
             raise ValueError("Cannot recover an unrecoverable signature")
-        x, y = self._backend.recover(signature, data, hash)
+        x, y = self._backend.recover(signature, self._digest(data, hash))
         return self._encode_public_key(x, y)
 
 
@@ -269,7 +262,7 @@ class EllipticCurve:
             raise ValueError("Invalid signature format")
         if not isinstance(public_key, tuple):
             public_key = self._decode_public_key(public_key)
-        return self._backend.verify(signature, data, public_key, hash)
+        return self._backend.verify(signature, self._digest(data, hash), public_key)
 
 
     def derive_child(self, seed, child):

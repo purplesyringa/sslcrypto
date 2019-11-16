@@ -1,4 +1,3 @@
-import hashlib
 import ctypes
 import os
 from ._ecc import ECC
@@ -560,28 +559,7 @@ class ECCBackend:
             return BN(subject[:(len(self.order) + 7) // 8])
 
 
-        def sign(self, data, private_key, hash, recoverable, entropy):
-            if callable(hash):
-                subject = hash(data)
-            elif hash == "sha256":
-                h = hashlib.sha256()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha512":
-                h = hashlib.sha512()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha1":
-                h = hashlib.sha1()
-                h.update(data)
-                subject = h.digest()
-            elif hash is None:
-                # *Highly* unrecommended. Only use this if the input is very
-                # small
-                subject = data
-            else:
-                raise ValueError("Unsupported hash function")
-
+        def sign(self, subject, private_key, recoverable, entropy):
             z = self._subject_to_bn(subject)
 
             private_key = BN(private_key)
@@ -646,28 +624,7 @@ class ECCBackend:
                     lib.EC_POINT_free(rp)
 
 
-        def recover(self, signature, data, hash):
-            if callable(hash):
-                subject = hash(data)
-            elif hash == "sha256":
-                h = hashlib.sha256()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha512":
-                h = hashlib.sha512()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha1":
-                h = hashlib.sha1()
-                h.update(data)
-                subject = h.digest()
-            elif hash is None:
-                # *Highly* unrecommended. Only use this if the input is very
-                # small
-                subject = data
-            else:
-                raise ValueError("Unsupported hash function")
-
+        def recover(self, signature, subject):
             recid = signature[0] - 31
             r = BN(signature[1:self.public_key_length + 1])
             s = BN(signature[self.public_key_length + 1:])
@@ -721,24 +678,7 @@ class ECCBackend:
                 lib.EC_POINT_free(rp)
 
 
-        def verify(self, signature, data, public_key, hash):
-            if callable(hash):
-                subject = hash(data)
-            elif hash == "sha256":
-                h = hashlib.sha256()
-                h.update(data)
-                subject = h.digest()
-            elif hash == "sha512":
-                h = hashlib.sha512()
-                h.update(data)
-                subject = h.digest()
-            elif hash is None:
-                # *Highly* unrecommended. Only use this if the input is very
-                # small
-                subject = data
-            else:
-                raise ValueError("Unsupported hash function")
-
+        def verify(self, signature, subject, public_key):
             r_raw = signature[:self.public_key_length]
             r = BN(r_raw)
             s = BN(signature[self.public_key_length:])
