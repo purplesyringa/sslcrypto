@@ -257,8 +257,8 @@ class EllipticCurve:
         return self._aes.decrypt(ciphertext, iv, k_enc, algo=algo)
 
 
-    def sign(self, data, private_key, hash="sha256", recoverable=False, entropy=None):
-        return self._backend.sign(self._digest(data, hash), private_key, recoverable, entropy)
+    def sign(self, data, private_key, hash="sha256", recoverable=False, is_compressed=True, entropy=None):
+        return self._backend.sign(self._digest(data, hash), private_key, recoverable, is_compressed, entropy)
 
 
     def recover(self, signature, data, hash="sha256"):
@@ -266,7 +266,8 @@ class EllipticCurve:
         if len(signature) != 1 + 2 * self._backend.public_key_length:
             raise ValueError("Cannot recover an unrecoverable signature")
         x, y = self._backend.recover(signature, self._digest(data, hash))
-        return self._encode_public_key(x, y)
+        is_compressed = signature[0] >= 31
+        return self._encode_public_key(x, y, is_compressed=is_compressed)
 
 
     def verify(self, signature, data, public_key, hash="sha256"):

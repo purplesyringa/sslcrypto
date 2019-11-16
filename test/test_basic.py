@@ -111,6 +111,16 @@ def test_static(ecc):
     assert curve.verify(signature[1:], data, pub1)
     assert curve.recover(signature, data) == pub1
 
+    signature = b"\x1b\x14\xc4\x95z7-\xaf\x91T&\xa7\xd0\xfc\x9b\x8b\x08\x15g\xa1\x82[\x08\x91o\xe1.\x8d\xb6=\x1a\x88\xe07\x01\xf39\xe5j~\xd5#\xd2\xbc\x88 \x16Ts\xac\x9dI\x0f.\xe8aCT8H\\\xb7pb-"
+    pub1_uncompressed = curve.private_to_public(priv1, is_compressed=False)
+    assert curve.sign(data, priv1, recoverable=True, is_compressed=False, entropy=entropy) == signature
+    assert curve.sign(data, priv1, is_compressed=False, entropy=entropy) == signature[1:]
+    assert curve.verify(signature, data, pub1)
+    assert curve.verify(signature[1:], data, pub1)
+    assert curve.verify(signature, data, pub1_uncompressed)
+    assert curve.verify(signature[1:], data, pub1_uncompressed)
+    assert curve.recover(signature, data) == pub1_uncompressed
+
     # BIP32
     assert curve.derive_child(priv1, 0) == b"*-\x0b\xcd\x14|l-\x8d\x07\x15N\xdbX\xaa\x92\x12\n\x8cU\x8d2-\x00\x13\xa2:\x11UFV*"
     assert curve.derive_child(priv1, 100) == b"{N*\xa4\xd3\xa2\xea\xe0\x8c\xbbo\xaar\x91\x86\x88e\x85\x83\xb9\xeb}\xf7\xe6\x01\x80\xc1\xde`\xa1\xe3\x1d"

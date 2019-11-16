@@ -555,7 +555,7 @@ class ECCBackend:
             return BN(subject[:(len(self.order) + 7) // 8])
 
 
-        def sign(self, subject, private_key, recoverable, entropy):
+        def sign(self, subject, private_key, recoverable, is_compressed, entropy):
             z = self._subject_to_bn(subject)
 
             private_key = BN(private_key)
@@ -613,7 +613,12 @@ class ECCBackend:
                         # The line below is highly unlikely to matter in case of
                         # secp256k1 but might make sense for other curves
                         recid += 2 * int(rx // self.order)
-                        return bytes([31 + recid]) + r_buf + s_buf
+                        if is_compressed:
+                            return bytes([31 + recid]) + r_buf + s_buf
+                        else:
+                            if recid >= 4:
+                                raise ValueError("Too big recovery ID, use compressed address instead")
+                            return bytes([27 + recid]) + r_buf + s_buf
                     else:
                         return r_buf + s_buf
                 finally:
@@ -621,7 +626,7 @@ class ECCBackend:
 
 
         def recover(self, signature, subject):
-            recid = signature[0] - 31
+            recid = signature[0] - 27 if signature[0] < 31 else signature[0] - 31
             r = BN(signature[1:self.public_key_length + 1])
             s = BN(signature[self.public_key_length + 1:])
 

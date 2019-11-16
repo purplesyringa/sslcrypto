@@ -223,7 +223,7 @@ class ECCBackend:
             return bytes_to_int(subject[:(self.order_bitlength + 7) // 8])
 
 
-        def sign(self, subject, raw_private_key, recoverable, entropy):
+        def sign(self, subject, raw_private_key, recoverable, is_compressed, entropy):
             z = self._subject_to_int(subject)
 
             private_key = bytes_to_int(raw_private_key)
@@ -270,14 +270,19 @@ class ECCBackend:
                     # Invalid k
                     continue
 
-                rs_bus = self._int_to_bytes(r) + self._int_to_bytes(s)
+                rs_buf = self._int_to_bytes(r) + self._int_to_bytes(s)
 
                 if recoverable:
                     recid = py % 2
                     recid += 2 * int(px // self.n)
-                    return bytes([31 + recid]) + rs_bus
+                    if is_compressed:
+                        return bytes([31 + recid]) + rs_buf
+                    else:
+                        if recid >= 4:
+                            raise ValueError("Too big recovery ID, use compressed address instead")
+                        return bytes([27 + recid]) + rs_buf
                 else:
-                    return rs_bus
+                    return rs_buf
 
 
         def recover(self, signature, subject):
