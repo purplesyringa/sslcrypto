@@ -46,8 +46,11 @@ class EllipticCurve:
         self.name = name
 
 
-    def _encode_public_key(self, x, y):
-        return bytes([0x02 + (y[-1] % 2)]) + x
+    def _encode_public_key(self, x, y, is_compressed=True):
+        if is_compressed:
+            return bytes([0x02 + (y[-1] % 2)]) + x
+        else:
+            return bytes([0x04]) + x + y
 
 
     def _decode_public_key(self, public_key, partial=False):
@@ -95,9 +98,9 @@ class EllipticCurve:
         return self._backend.new_private_key()
 
 
-    def private_to_public(self, private_key):
+    def private_to_public(self, private_key, is_compressed=True):
         x, y = self._backend.private_to_public(private_key)
-        return self._encode_public_key(x, y)
+        return self._encode_public_key(x, y, is_compressed=is_compressed)
 
 
     def private_to_wif(self, private_key):
@@ -132,9 +135,9 @@ class EllipticCurve:
         return base58check.b58encode(b"\x00" + hash160 + checksum)
 
 
-    def private_to_address(self, private_key):
+    def private_to_address(self, private_key, is_compressed=True):
         # Kinda useless but left for quick migration from pybitcointools
-        return self.public_to_address(self.private_to_public(private_key))
+        return self.public_to_address(self.private_to_public(private_key, is_compressed=is_compressed))
 
 
     def derive(self, private_key, public_key):

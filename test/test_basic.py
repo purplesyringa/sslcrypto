@@ -95,8 +95,10 @@ def test_static(ecc):
     assert curve.wif_to_private(b"5JpCC7mMHxZ8Lw9TwUymMzdcfWeLVi8r8Tyyz5ic6G12iqAXr6E") == priv2
 
     # Addresses
-    assert curve.public_to_address(pub1) == curve.private_to_address(priv1) == b"1G1ZCdmQUuhnn8zYrx2Q2hXMB5NjsbZ3k7"
-    assert curve.public_to_address(pub2) == curve.private_to_address(priv2) == b"1Dj1pAV83cDLZPxYhKfnbDMigKVxML6KPj"
+    assert curve.public_to_address(pub1) == curve.private_to_address(priv1) == b"1553rYBLgCVA6vGYcN7AipdAeWGp9tkAw4"
+    assert curve.private_to_address(priv1, is_compressed=False) == b"1G1ZCdmQUuhnn8zYrx2Q2hXMB5NjsbZ3k7"
+    assert curve.public_to_address(pub2) == curve.private_to_address(priv2) == b"1JCQGE4mVQ2DnEZEdVJJnAkMdEPjqVDNtc"
+    assert curve.private_to_address(priv2, is_compressed=False) == b"1Dj1pAV83cDLZPxYhKfnbDMigKVxML6KPj"
 
     # ECDH
     assert curve.derive(priv1, pub2) == curve.derive(priv2, pub1) == b"\xb2\xab\x1d\xb4\x9dBX\x81\xc6\xf2\x15]+\xc0\x85\xc7\xe9\x018G\xe1\xda\x18\xf4\xac\xaa\x00q\x1d\xc6+\x04"
