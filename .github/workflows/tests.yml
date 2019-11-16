@@ -19,9 +19,27 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install
       run: |
+        mkdir output
         python -m pip install --upgrade pip
         pip install .
     - name: Test
       run: |
         pip install pytest
         pytest test
+    - name: Lint
+      run: |
+        pip install pylint pylint-exit shields
+        pylint --output-format=parseable sslcrypto >output/lint-out.txt || pylint-exit $?
+        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | py -c "print(round(float(input()) * 10))")
+        curl https://img.shields.io/badge/quality-$(quality)%25-brightgreen.svg >quality.svg
+        # Upload
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git checkout gh-action
+        git add quality.svg
+        git commit -m "Update shields"
+    - name: Upload lint results
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: gh-action
