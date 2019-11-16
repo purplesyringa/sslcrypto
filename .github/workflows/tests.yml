@@ -32,20 +32,20 @@ jobs:
 
     - name: Lint
       run: |
-        pip install pylint pylint-exit shields
-        pylint --output-format=parseable sslcrypto >output/lint-out.txt || pylint-exit $?
-        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | python -c "print(round(float(input()) * 10))")
-        curl https://img.shields.io/badge/quality-$(quality)%25-brightgreen.svg >quality.svg
-        # Upload
+        pip install pylint shields
+        pylint --output-format=parseable --exit-zero sslcrypto >output/lint-out.txt
+        # Save results
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git checkout gh-action
+        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | python -c "print(round(float(input()) * 10))")
+        curl https://img.shields.io/badge/quality-$quality%25-brightgreen.svg >quality.svg
         git add quality.svg
         git commit -m "Update shields"
 
     - name: Upload lint results
       uses: ad-m/github-push-action@master
-      if: matrix.python-version == "3.7"
+      if: matrix.python-version == '3.7'
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         branch: gh-action
