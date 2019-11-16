@@ -396,7 +396,6 @@ class ECCBackend:
             else:
                 raise ValueError("Unsupported hash function")
 
-            print(subject)
             z = self._subject_to_int(subject)
 
             private_key = self._bytes_to_int(private_key)
@@ -553,7 +552,7 @@ class ECCBackend:
             u2 = (r * sinv) % self.n
 
             x1, y1 = self.jacobian.fast_shamir(self.g, u1, public_key, u2)
-            if r != x1:
+            if r != x1 % self.n:
                 raise ValueError("Invalid signature")
 
             return True

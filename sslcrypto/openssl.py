@@ -768,7 +768,7 @@ class ECCBackend:
                 try:
                     if not lib.EC_POINT_mul(self.group, result, u1.bn, pub_p, u2.bn, None):
                         raise ValueError("Could not recover public key")
-                    if self._point_to_affine(result)[0] != r_raw:
+                    if BN(self._point_to_affine(result)[0]) % self.order != r:
                         raise ValueError("Invalid signature")
                     return True
                 finally:
