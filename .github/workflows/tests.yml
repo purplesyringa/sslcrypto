@@ -29,7 +29,7 @@ jobs:
       run: |
         pip install pytest coverage
         coverage run -m pytest test
-        coverage report | tail -n 1 | tr -s " " | cut -d " " -f4 | head -c -3 >output/coverage.txt
+        coverage report | tail -n 1 | tr -s " " | cut -d " " -f4 | head -c -2 >output/coverage.txt
 
     - name: Lint
       run: |
@@ -45,6 +45,7 @@ jobs:
         quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | python -c "print(round(float(input()) * 10))")
         curl https://img.shields.io/badge/quality-$quality%25-brightgreen.svg >quality.svg
 
+        coverage=$(cat output/coverage.txt)
         curl https://img.shields.io/badge/coverage-$coverage%25-brightgreen.svg >coverage.svg
 
         git add quality.svg coverage.svg
