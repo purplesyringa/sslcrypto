@@ -69,4 +69,4 @@ def discover_library():
             return ctypes.CDLL(path)
         except OSError:
             pass
-    return None
+    raise OSError("OpenSSL is unavailable")
