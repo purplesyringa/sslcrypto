@@ -35,20 +35,25 @@ def _test(curve):
                         raise ValueError("Got wrong data")
 
     # ECDSA
-    assert curve.recover(curve.sign(data, priv1, recoverable=True), data) == pub1
-    assert curve.verify(curve.sign(data, priv1), data, pub1)
-    assert curve.verify(curve.sign(data, priv1, recoverable=True), data, pub1)
-    # Unrecoverable signature
-    with pytest.raises(ValueError):
-        curve.recover(curve.sign(data, priv1), data)
-    # Wrong data
-    curve.recover(curve.sign(data, priv1, recoverable=True), data2) != pub1
-    # Wrong public key
-    with pytest.raises(ValueError):
-        curve.verify(curve.sign(data, priv1), data, pub2)
-    # Wrong data
-    with pytest.raises(ValueError):
-        curve.verify(curve.sign(data, priv1), data2, pub1)
+    for hash in ("sha256", "sha1"):
+        signature = curve.sign(data, priv1, hash=hash)
+        rec_signature = curve.sign(data, priv1, hash=hash, recoverable=True)
+
+        assert curve.recover(rec_signature, data, hash=hash) == pub1
+        assert curve.verify(signature, data, pub1, hash=hash)
+        assert curve.verify(rec_signature, data, pub1, hash=hash)
+
+        # Unrecoverable signature
+        with pytest.raises(ValueError):
+            curve.recover(signature, data, hash=hash)
+        # Wrong data
+        curve.recover(rec_signature, data2, hash=hash) != pub1
+        # Wrong public key
+        with pytest.raises(ValueError):
+            curve.verify(signature, data, pub2, hash=hash)
+        # Wrong data
+        with pytest.raises(ValueError):
+            curve.verify(signature, data2, pub1, hash=hash)
 
 
 # Show different curves as different testcases
