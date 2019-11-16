@@ -161,7 +161,7 @@ class EllipticCurve:
 
 
     # High-level functions
-    def encrypt(self, data, public_key, algo="aes-256-cbc", derivation="sha256", mac="hmac-sha256"):
+    def encrypt(self, data, public_key, algo="aes-256-cbc", derivation="sha256", mac="hmac-sha256", return_aes_key=False):
         # Generate ephemeral private key
         private_key = self.new_private_key()
 
@@ -193,7 +193,10 @@ class EllipticCurve:
         else:
             raise ValueError("Unsupported MAC")
 
-        return ciphertext + tag
+        if return_aes_key:
+            return ciphertext + tag, k_enc
+        else:
+            return ciphertext + tag
 
 
     def decrypt(self, ciphertext, private_key, algo="aes-256-cbc", derivation="sha256", mac="hmac-sha256"):
