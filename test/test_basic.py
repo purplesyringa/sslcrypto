@@ -13,17 +13,26 @@ def _test(curve):
     data = b"Hello, world!"
     data2 = b"Just a test"
 
+    # WIF
+    assert curve.wif_to_private(curve.private_to_wif(priv1)) == priv1
+
     # ECDH
     assert curve.derive(priv1, pub2) == curve.derive(priv2, pub1)
     assert curve.derive(priv1, pub2) != curve.derive(priv3, pub1)
 
     # ECIES
-    assert curve.decrypt(curve.encrypt(data, pub1), priv1) == data
-    with pytest.raises(ValueError):
-        if curve.decrypt(curve.encrypt(data, pub1), priv2) != data:
-            # We have to handle this case separately because AES might
-            # accidentally manage to decrypt data with a wrong key
-            raise ValueError("Got wrong data")
+    for algo in ("aes-128-ctr", "aes-192-ofb", "aes-256-cbc"):
+        for derivation in ("sha256", "sha512"):
+            for mac in ("hmac-sha256", "hmac-sha512", None):
+                params = {"algo": algo, "derivation": derivation, "mac": mac}
+
+                ciphertext = curve.encrypt(data, pub1, **params)
+                assert curve.decrypt(ciphertext, priv1, **params) == data
+                with pytest.raises(ValueError):
+                    if curve.decrypt(ciphertext, priv2, **params) != data:
+                        # We have to handle this case separately because AES might
+                        # accidentally manage to decrypt data with a wrong key
+                        raise ValueError("Got wrong data")
 
     # ECDSA
     assert curve.recover(curve.sign(data, priv1, recoverable=True), data) == pub1

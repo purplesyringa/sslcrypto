@@ -16,6 +16,10 @@ class AES:
         return int(key_length) // 8, cipher_type
 
 
+    def get_algo_key_length(self, algo):
+        return self._parse_algo_name(algo)[0]
+
+
     def new_key(self, algo="aes-256-cbc"):
         key_length, _ = self._parse_algo_name(algo)
         return os.urandom(key_length)

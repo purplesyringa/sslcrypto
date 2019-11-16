@@ -168,7 +168,10 @@ class EllipticCurve:
         # Derive key
         ecdh = self.derive(private_key, public_key)
         key = self._digest(ecdh, derivation)
-        k_enc, k_mac = key[:32], key[32:]
+        k_enc_len = self._aes.get_algo_key_length(algo)
+        if len(key) < k_enc_len:
+            raise ValueError("Too short digest")
+        k_enc, k_mac = key[:k_enc_len], key[k_enc_len:]
 
         # Encrypt
         ciphertext, iv = self._aes.encrypt(data, k_enc, algo=algo)
@@ -208,7 +211,10 @@ class EllipticCurve:
 
         if len(ciphertext) < tag_length:
             raise ValueError("Ciphertext is too small to contain MAC tag")
-        ciphertext, tag = ciphertext[:-tag_length], ciphertext[-tag_length:]
+        if tag_length == 0:
+            tag = b""
+        else:
+            ciphertext, tag = ciphertext[:-tag_length], ciphertext[-tag_length:]
 
         orig_ciphertext = ciphertext
 
@@ -222,7 +228,10 @@ class EllipticCurve:
         # Derive key
         ecdh = self.derive(private_key, public_key)
         key = self._digest(ecdh, derivation)
-        k_enc, k_mac = key[:32], key[32:]
+        k_enc_len = self._aes.get_algo_key_length(algo)
+        if len(key) < k_enc_len:
+            raise ValueError("Too short digest")
+        k_enc, k_mac = key[:k_enc_len], key[k_enc_len:]
 
         # Verify MAC tag
         if callable(mac):
