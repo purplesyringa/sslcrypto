@@ -2,7 +2,7 @@
 This code is public domain. Everyone has the right to do whatever they want
 with it for any purpose.
 
-In case your jurisdiction does not consider the above disclaimer valid or 
+In case your jurisdiction does not consider the above disclaimer valid or
 enforceable, here's an MIT license for you:
 
 The MIT License (MIT)
@@ -29,6 +29,9 @@ THE SOFTWARE.
 """
 
 
+from ._util import inverse
+
+
 class JacobianCurve:
     def __init__(self, p, n, a, b, g):
         self.p = p
@@ -37,18 +40,6 @@ class JacobianCurve:
         self.b = b
         self.g = g
         self.n_length = len(bin(self.n).replace("0b", ""))
-
-
-    def inv(self, a, n):
-        if a == 0:
-            return 0
-        lm, hm = 1, 0
-        low, high = a % n, n
-        while low > 1:
-            r = high // low
-            nm, new = hm - lm * r, high - low * r
-            lm, low, hm, high = nm, new, lm, low
-        return lm % n
 
 
     def isinf(self, p):
@@ -96,7 +87,7 @@ class JacobianCurve:
 
 
     def from_jacobian(self, p):
-        z = self.inv(p[2], self.p)
+        z = inverse(p[2], self.p)
         return (p[0] * z ** 2) % self.p, (p[1] * z ** 3) % self.p
 
 

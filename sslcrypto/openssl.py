@@ -1,41 +1,36 @@
 import ctypes
 import os
+import hmac
 from ._ecc import ECC
+from . import library
 
-lib = None
 
+lib = library.discover_library()
 
-def init():
-    global aes, ecc, rsa
+# Initialize internal state
+try:
+    lib.OPENSSL_add_all_algorithms_conf()
+except AttributeError:
+    pass
 
-    # Initialize internal state
-    try:
-        lib.OPENSSL_add_all_algorithms_conf()
-    except AttributeError:
-        pass
-
-    # Initialize functions
-    try:
-        lib.EVP_CIPHER_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
-    except AttributeError:
-        pass
-    lib.EVP_get_cipherbyname.restype = ctypes.POINTER(ctypes.c_char)
-    lib.BN_new.restype = ctypes.POINTER(ctypes.c_char)
-    lib.BN_bin2bn.restype = ctypes.POINTER(ctypes.c_char)
-    lib.BN_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
-    lib.EC_GROUP_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
-    lib.EC_KEY_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
-    lib.EC_POINT_new.restype = ctypes.POINTER(ctypes.c_char)
-    lib.EC_KEY_get0_private_key.restype = ctypes.POINTER(ctypes.c_char)
-    lib.EVP_PKEY_new.restype = ctypes.POINTER(ctypes.c_char)
-    try:
-        lib.EVP_PKEY_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
-    except AttributeError:
-        pass
-
-    aes = AES()
-    ecc = ECC(ECCBackend())
-    rsa = RSA()
+# Initialize functions
+try:
+    lib.EVP_CIPHER_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
+except AttributeError:
+    pass
+lib.EVP_get_cipherbyname.restype = ctypes.POINTER(ctypes.c_char)
+lib.BN_new.restype = ctypes.POINTER(ctypes.c_char)
+lib.BN_bin2bn.restype = ctypes.POINTER(ctypes.c_char)
+lib.BN_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
+lib.EC_GROUP_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
+lib.EC_KEY_new_by_curve_name.restype = ctypes.POINTER(ctypes.c_char)
+lib.EC_POINT_new.restype = ctypes.POINTER(ctypes.c_char)
+lib.EC_KEY_get0_private_key.restype = ctypes.POINTER(ctypes.c_char)
+lib.EVP_PKEY_new.restype = ctypes.POINTER(ctypes.c_char)
+try:
+    lib.EVP_PKEY_CTX_new.restype = ctypes.POINTER(ctypes.c_char)
+except AttributeError:
+    pass
 
 
 class AES:
@@ -49,10 +44,10 @@ class AES:
     def __init__(self):
         self.lib = lib  # For finalizer
 
-        self.is_supported_evp_cipher_ctx_new = hasattr(lib, "EVP_CIPHER_CTX_new")
-        self.is_supported_evp_cipher_ctx_reset = hasattr(lib, "EVP_CIPHER_CTX_reset")
+        self.is_supported_ctx_new = hasattr(lib, "EVP_CIPHER_CTX_new")
+        self.is_supported_ctx_reset = hasattr(lib, "EVP_CIPHER_CTX_reset")
 
-        if self.is_supported_evp_cipher_ctx_new:
+        if self.is_supported_ctx_new:
             self.ctx = lib.EVP_CIPHER_CTX_new()
         else:
             # 1 KiB ought to be enough for everybody. We don't know the real
@@ -62,7 +57,7 @@ class AES:
 
 
     def __del__(self):
-        if self.is_supported_evp_cipher_ctx_new:
+        if self.is_supported_ctx_new:
             self.lib.EVP_CIPHER_CTX_free(self.ctx)
 
 
@@ -77,7 +72,7 @@ class AES:
 
     def new_key(self, algo="aes-256-cbc"):
         # Initialize context
-        if not self.is_supported_evp_cipher_ctx_new:
+        if not self.is_supported_ctx_new:
             lib.EVP_CIPHER_CTX_init(self.ctx)
         try:
             # Get key length
@@ -89,7 +84,7 @@ class AES:
             lib.RAND_bytes(key, key_length)
             return bytes(key)
         finally:
-            if self.is_supported_evp_cipher_ctx_reset:
+            if self.is_supported_ctx_reset:
                 lib.EVP_CIPHER_CTX_reset(self.ctx)
             else:
                 lib.EVP_CIPHER_CTX_cleanup(self.ctx)
@@ -97,7 +92,7 @@ class AES:
 
     def encrypt(self, data, key, algo="aes-256-cbc"):
         # Initialize context
-        if not self.is_supported_evp_cipher_ctx_new:
+        if not self.is_supported_ctx_new:
             lib.EVP_CIPHER_CTX_init(self.ctx)
         try:
             lib.EVP_EncryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
@@ -130,7 +125,7 @@ class AES:
             ciphertext = output[:output_len.value + output_len2.value]
             return ciphertext, iv
         finally:
-            if self.is_supported_evp_cipher_ctx_reset:
+            if self.is_supported_ctx_reset:
                 lib.EVP_CIPHER_CTX_reset(self.ctx)
             else:
                 lib.EVP_CIPHER_CTX_cleanup(self.ctx)
@@ -138,7 +133,7 @@ class AES:
 
     def decrypt(self, ciphertext, iv, key, algo="aes-256-cbc"):
         # Initialize context
-        if not self.is_supported_evp_cipher_ctx_new:
+        if not self.is_supported_ctx_new:
             lib.EVP_CIPHER_CTX_init(self.ctx)
         try:
             lib.EVP_DecryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
@@ -156,7 +151,12 @@ class AES:
             # Make sure ciphertext length is correct
             block_size = lib.EVP_CIPHER_CTX_block_size(self.ctx)
             if len(ciphertext) % block_size != 0:
-                raise ValueError("Expected ciphertext to be a multiple of {} bytes, got {} bytes".format(block_size, len(ciphertext)))
+                raise ValueError(
+                    "Expected ciphertext to be a multiple of {} bytes, got {} bytes".format(
+                        block_size,
+                        len(ciphertext)
+                    )
+                )
 
             # Set key and IV
             lib.EVP_DecryptInit_ex(self.ctx, None, None, key, iv)
@@ -175,7 +175,7 @@ class AES:
 
             return output[:output_len.value + output_len2.value]
         finally:
-            if self.is_supported_evp_cipher_ctx_reset:
+            if self.is_supported_ctx_reset:
                 lib.EVP_CIPHER_CTX_reset(self.ctx)
             else:
                 lib.EVP_CIPHER_CTX_cleanup(self.ctx)
@@ -183,26 +183,23 @@ class AES:
 
 
 class BN:
-    def __init__(self, value=None):
-        if value is None:
-            self.bn = lib.BN_new()
-            self._free = True
-        elif isinstance(value, bytes):
-            self.bn = lib.BN_bin2bn(value, len(value), None)
-            self._free = True
+    def __init__(self, value=None, link_only=False):
+        if link_only:
+            self.bn = value
+            self._free = False
         else:
-            self.bn = lib.BN_new()
-            lib.BN_clear(self.bn)
-            lib.BN_add_word(self.bn, value)
-            self._free = True
+            if value is None:
+                self.bn = lib.BN_new()
+                self._free = True
+            elif isinstance(value, bytes):
+                self.bn = lib.BN_bin2bn(value, len(value), None)
+                self._free = True
+            else:
+                self.bn = lib.BN_new()
+                lib.BN_clear(self.bn)
+                lib.BN_add_word(self.bn, value)
+                self._free = True
 
-    @classmethod
-    def link(cls, bn):
-        obj = cls()
-        lib.BN_free(obj.bn)
-        obj.bn = bn
-        obj._free = False
-        return obj
 
     def __del__(self):
         if self._free:
@@ -368,8 +365,6 @@ class ECCBackend:
 
     class EllipticCurveBackend:
         def __init__(self, name):
-            self.aes = aes
-
             self.lib = lib  # For finalizer
             self.nid = ECCBackend.NIDS[name]
             self.group = lib.EC_GROUP_new_by_curve_name(self.nid)
@@ -384,7 +379,6 @@ class ECCBackend:
             lib.EC_GROUP_get_cofactor(self.group, cofactor.bn, None)
 
             self.public_key_length = (len(self.p) + 7) // 8
-            self.cofactor = int(cofactor)
 
             self.is_supported_evp_pkey_ctx = hasattr(lib, "EVP_PKEY_CTX_new")
 
@@ -463,7 +457,7 @@ class ECCBackend:
             eckey = lib.EC_KEY_new_by_curve_name(self.nid)
             lib.EC_KEY_generate_key(eckey)
             # To big integer
-            private_key = BN.link(lib.EC_KEY_get0_private_key(eckey))
+            private_key = BN(lib.EC_KEY_get0_private_key(eckey), link_only=True)
             # To binary
             private_key_buf = private_key.bytes()
             # Cleanup
@@ -576,7 +570,7 @@ class ECCBackend:
                         while True:
                             if not lib.EC_KEY_generate_key(eckey):
                                 raise ValueError("Could not generate EC_KEY")
-                            yield BN.link(lib.EC_KEY_get0_private_key(eckey))
+                            yield BN(lib.EC_KEY_get0_private_key(eckey), link_only=True)
                     finally:
                         lib.EC_KEY_free(eckey)
             else:
@@ -630,8 +624,6 @@ class ECCBackend:
             s = BN(signature[self.public_key_length + 1:])
 
             # Verify bounds
-            if not (0 <= recid < 2 * (self.cofactor + 1)):
-                raise ValueError("Invalid recovery ID")
             if r >= self.order:
                 raise ValueError("r is out of bounds")
             if s >= self.order:
@@ -740,3 +732,8 @@ class ECCBackend:
 
 class RSA:
     pass
+
+
+aes = AES()
+ecc = ECC(ECCBackend())
+rsa = RSA()

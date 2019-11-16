@@ -9,6 +9,7 @@ from ._util import *
 
 
 class ECCBackend:
+    # pylint: disable=line-too-long
     CURVES = {
         # "curvename": (p, n, a, b, (Gx, Gy)),
         "secp112r1": (
@@ -162,6 +163,7 @@ class ECCBackend:
             )
         )
     }
+    # pylint: enable=line-too-long
 
     def is_supported(self, name):
         return name in self.CURVES
@@ -263,7 +265,7 @@ class ECCBackend:
                     # Invalid k
                     continue
 
-                s = (self.jacobian.inv(k, self.n) * (z + (private_key * r))) % self.n
+                s = (inverse(k, self.n) * (z + (private_key * r))) % self.n
                 if s == 0:
                     # Invalid k
                     continue
@@ -286,14 +288,14 @@ class ECCBackend:
             s = bytes_to_int(signature[self.public_key_length + 1:])
 
             # Verify bounds
-            if not (0 <= recid < 2 * (self.p // self.n + 1)):
+            if not 0 <= recid < 2 * (self.p // self.n + 1):
                 raise ValueError("Invalid recovery ID")
             if r >= self.n:
                 raise ValueError("r is out of bounds")
             if s >= self.n:
                 raise ValueError("s is out of bounds")
 
-            rinv = self.jacobian.inv(r, self.n)
+            rinv = inverse(r, self.n)
             u1 = (-z * rinv) % self.n
             u2 = (s * rinv) % self.n
 
@@ -336,11 +338,11 @@ class ECCBackend:
             if not self.jacobian.is_on_curve(public_key):
                 raise ValueError("Public key is not on curve")
 
-            sinv = self.jacobian.inv(s, self.n)
+            sinv = inverse(s, self.n)
             u1 = (z * sinv) % self.n
             u2 = (r * sinv) % self.n
 
-            x1, y1 = self.jacobian.fast_shamir(self.g, u1, public_key, u2)
+            x1, _ = self.jacobian.fast_shamir(self.g, u1, public_key, u2)
             if r != x1 % self.n:
                 raise ValueError("Invalid signature")
 

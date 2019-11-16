@@ -1,6 +1,6 @@
-def int_to_bytes(raw, len):
+def int_to_bytes(raw, length):
     data = []
-    for _ in range(len):
+    for _ in range(length):
         data.append(raw % 256)
         raw //= 256
     return bytes(data[::-1])
@@ -19,6 +19,18 @@ def legendre(a, p):
         return -1
     else:
         return res
+
+
+def inverse(a, n):
+    if a == 0:
+        return 0
+    lm, hm = 1, 0
+    low, high = a % n, n
+    while low > 1:
+        r = high // low
+        nm, new = hm - lm * r, high - low * r
+        lm, low, hm, high = nm, new, lm, low
+    return lm % n
 
 
 def square_root_mod_prime(n, p):

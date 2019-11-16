@@ -1,11 +1,11 @@
-import base58check
 import hashlib
 import hmac
+import base58check
 
 
 try:
     hashlib.new("ripemd160")
-except Exception:
+except ValueError:
     # No native implementation
     from . import _ripemd
     def ripemd160(*args):
@@ -58,14 +58,14 @@ class EllipticCurve:
             if partial:
                 if len(public_key) < expected_length:
                     raise ValueError("Invalid uncompressed public key length")
-                x = public_key[1:1 + self._backend.public_key_length]
-                y = public_key[1 + self._backend.public_key_length:expected_length]
-                return (x, y), expected_length
             else:
                 if len(public_key) != expected_length:
                     raise ValueError("Invalid uncompressed public key length")
-                x = public_key[1:1 + self._backend.public_key_length]
-                y = public_key[1 + self._backend.public_key_length:]
+            x = public_key[1:1 + self._backend.public_key_length]
+            y = public_key[1 + self._backend.public_key_length:expected_length]
+            if partial:
+                return (x, y), expected_length
+            else:
                 return x, y
         elif public_key[0] in (0x02, 0x03):
             # Compressed
@@ -239,7 +239,7 @@ class EllipticCurve:
         if not hmac.compare_digest(tag, expected_tag):
             raise ValueError("Invalid MAC tag")
 
-        return self._backend.aes.decrypt(ciphertext, iv, k_enc)
+        return self._backend.aes.decrypt(ciphertext, iv, k_enc, algo=algo)
 
 
     def sign(self, data, private_key, hash="sha256", recoverable=False, entropy=None):
@@ -267,6 +267,6 @@ class EllipticCurve:
 
     def derive_child(self, seed, child):
         # Based on BIP32
-        if not (0 <= child < 2 ** 31):
+        if not 0 <= child < 2 ** 31:
             raise ValueError("Invalid child index")
         return self._backend.derive_child(seed, child)

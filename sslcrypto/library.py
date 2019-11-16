@@ -5,7 +5,7 @@ import ctypes.util
 
 
 # Discover OpenSSL library
-def discoverPaths():
+def discover_paths():
     # Search local files first
     if "win" in sys.platform:
         # Windows
@@ -29,7 +29,7 @@ def discoverPaths():
             ]
             openssl_paths += [os.path.abspath(name) for name in names]
             openssl_paths += [
-                os.path.join(environ["RESOURCEPATH"], "..", "Frameworks", name)
+                os.path.join(os.environ["RESOURCEPATH"], "..", "Frameworks", name)
                 for name in names
             ]
     else:
@@ -52,6 +52,7 @@ def discoverPaths():
 
     if hasattr(sys, "_MEIPASS") and "darwin" not in sys.platform:
         # Bundled. Assume the same libraries in the same directory
+        # pylint: disable=no-member,protected-access
         openssl_paths += [os.path.join(sys._MEIPASS, path) for path in openssl_paths]
 
     if "win" in sys.platform:
@@ -62,10 +63,10 @@ def discoverPaths():
     return openssl_paths
 
 
-def discoverLibrary():
-    for path in discoverPaths():
+def discover_library():
+    for path in discover_paths():
         try:
             return ctypes.CDLL(path)
-        except Exception:
+        except OSError:
             pass
     return None

@@ -1,37 +1,37 @@
-import pyaes
 import os
+import pyaes
 
 
 __all__ = ["aes"]
 
 class AES:
-    def _parseAlgoName(self, algo):
+    def _parse_algo_name(self, algo):
         if not algo.startswith("aes-") or algo.count("-") != 2:
             raise ValueError("Unknown cipher algorithm {}".format(algo))
-        key_length, type = algo[4:].split("-")
+        key_length, cipher_type = algo[4:].split("-")
         if key_length not in ("128", "192", "256"):
             raise ValueError("Unknown cipher algorithm {}".format(algo))
-        if type not in ("cbc", "ctr", "cfb", "ofb"):
+        if cipher_type not in ("cbc", "ctr", "cfb", "ofb"):
             raise ValueError("Unknown cipher algorithm {}".format(algo))
-        return int(key_length) // 8, type
+        return int(key_length) // 8, cipher_type
 
 
     def new_key(self, algo="aes-256-cbc"):
-        key_length, _ = self._parseAlgoName(algo)
+        key_length, _ = self._parse_algo_name(algo)
         return os.urandom(key_length)
 
 
     def encrypt(self, data, key, algo="aes-256-cbc"):
-        key_length, type = self._parseAlgoName(algo)
+        key_length, cipher_type = self._parse_algo_name(algo)
         if len(key) != key_length:
             raise ValueError("Expected key to be {} bytes, got {} bytes".format(key_length, len(key)))
 
         # Generate random IV
         iv = os.urandom(16)
 
-        if type == "cbc":
+        if cipher_type == "cbc":
             cipher = pyaes.AESModeOfOperationCBC(key, iv=iv)
-        elif type == "ctr":
+        elif cipher_type == "ctr":
             # The IV is actually a counter, not an IV but it does almost the
             # same. Notice: pyaes always uses 1 as initial counter! Make sure
             # not to call pyaes directly.
@@ -44,11 +44,11 @@ class AES:
                 iv_int = (iv_int * 256) + byte
             counter = pyaes.Counter(iv_int)
             cipher = pyaes.AESModeOfOperationCTR(key, counter=counter)
-        elif type == "cfb":
+        elif cipher_type == "cfb":
             # Change segment size from default 8 bytes to 16 bytes for OpenSSL
             # compatibility
             cipher = pyaes.AESModeOfOperationCFB(key, iv, segment_size=16)
-        elif type == "ofb":
+        elif cipher_type == "ofb":
             cipher = pyaes.AESModeOfOperationOFB(key, iv)
 
         encrypter = pyaes.Encrypter(cipher)
@@ -58,13 +58,13 @@ class AES:
 
 
     def decrypt(self, ciphertext, iv, key, algo="aes-256-cbc"):
-        key_length, type = self._parseAlgoName(algo)
+        key_length, cipher_type = self._parse_algo_name(algo)
         if len(key) != key_length:
             raise ValueError("Expected key to be {} bytes, got {} bytes".format(key_length, len(key)))
 
-        if type == "cbc":
+        if cipher_type == "cbc":
             cipher = pyaes.AESModeOfOperationCBC(key, iv=iv)
-        elif type == "ctr":
+        elif cipher_type == "ctr":
             # The IV is actually a counter, not an IV but it does almost the
             # same. Notice: pyaes always uses 1 as initial counter! Make sure
             # not to call pyaes directly.
@@ -77,11 +77,11 @@ class AES:
                 iv_int = (iv_int * 256) + byte
             counter = pyaes.Counter(iv_int)
             cipher = pyaes.AESModeOfOperationCTR(key, counter=counter)
-        elif type == "cfb":
+        elif cipher_type == "cfb":
             # Change segment size from default 8 bytes to 16 bytes for OpenSSL
             # compatibility
             cipher = pyaes.AESModeOfOperationCFB(key, iv, segment_size=16)
-        elif type == "ofb":
+        elif cipher_type == "ofb":
             cipher = pyaes.AESModeOfOperationOFB(key, iv)
 
         decrypter = pyaes.Decrypter(cipher)
