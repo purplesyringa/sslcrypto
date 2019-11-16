@@ -122,8 +122,6 @@ class EllipticCurve:
 
 
     def public_to_address(self, public_key):
-        # Decompress public key
-        public_key = b"\x04" + b"".join(self._decode_public_key(public_key))
         # Calculate hash160
         h = hashlib.sha256(public_key).digest()
         hash160 = ripemd160(h).digest()
