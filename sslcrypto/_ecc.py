@@ -1,4 +1,5 @@
 import hashlib
+import struct
 import hmac
 import base58check
 
@@ -44,61 +45,94 @@ class ECC:
         if name not in self.CURVES:
             raise ValueError("Unknown curve {}".format(name))
         nid = self.CURVES[name]
-        return EllipticCurve(self._backend(nid), self._aes)
+        return EllipticCurve(self._backend(nid), self._aes, nid)
 
 
 class EllipticCurve:
-    def __init__(self, backend, aes):
+    def __init__(self, backend, aes, nid):
         self._backend = backend
         self._aes = aes
+        self.nid = nid
 
 
-    def _encode_public_key(self, x, y, is_compressed=True):
-        if is_compressed:
-            return bytes([0x02 + (y[-1] % 2)]) + x
+    def _encode_public_key(self, x, y, is_compressed=True, raw=True):
+        if raw:
+            if is_compressed:
+                return bytes([0x02 + (y[-1] % 2)]) + x
+            else:
+                return bytes([0x04]) + x + y
         else:
-            return bytes([0x04]) + x + y
+            return struct.pack("!HH", self.nid, len(x)) + x + struct.pack("!H", len(y)) + y
 
 
-    def _decode_public_key(self, public_key, partial=False):
+    def _decode_public_key(self, public_key, partial=False, raw=True):
         if not public_key:
             raise ValueError("No public key")
 
-        if public_key[0] == 0x04:
-            # Uncompressed
-            expected_length = 1 + 2 * self._backend.public_key_length
-            if partial:
-                if len(public_key) < expected_length:
-                    raise ValueError("Invalid uncompressed public key length")
-            else:
-                if len(public_key) != expected_length:
-                    raise ValueError("Invalid uncompressed public key length")
-            x = public_key[1:1 + self._backend.public_key_length]
-            y = public_key[1 + self._backend.public_key_length:expected_length]
-            if partial:
-                return (x, y), expected_length
-            else:
-                return x, y
-        elif public_key[0] in (0x02, 0x03):
-            # Compressed
-            expected_length = 1 + self._backend.public_key_length
-            if partial:
-                if len(public_key) < expected_length:
-                    raise ValueError("Invalid compressed public key length")
-            else:
-                if len(public_key) != expected_length:
-                    raise ValueError("Invalid compressed public key length")
+        if raw:
+            if public_key[0] == 0x04:
+                # Uncompressed
+                expected_length = 1 + 2 * self._backend.public_key_length
+                if partial:
+                    if len(public_key) < expected_length:
+                        raise ValueError("Invalid uncompressed public key length")
+                else:
+                    if len(public_key) != expected_length:
+                        raise ValueError("Invalid uncompressed public key length")
+                x = public_key[1:1 + self._backend.public_key_length]
+                y = public_key[1 + self._backend.public_key_length:expected_length]
+                if partial:
+                    return (x, y), expected_length
+                else:
+                    return x, y
+            elif public_key[0] in (0x02, 0x03):
+                # Compressed
+                expected_length = 1 + self._backend.public_key_length
+                if partial:
+                    if len(public_key) < expected_length:
+                        raise ValueError("Invalid compressed public key length")
+                else:
+                    if len(public_key) != expected_length:
+                        raise ValueError("Invalid compressed public key length")
 
-            x, y = self._backend.decompress_point(public_key[:expected_length])
-            # Sanity check
-            if x != public_key[1:expected_length]:
-                raise ValueError("Incorrect compressed public key")
-            if partial:
-                return (x, y), expected_length
+                x, y = self._backend.decompress_point(public_key[:expected_length])
+                # Sanity check
+                if x != public_key[1:expected_length]:
+                    raise ValueError("Incorrect compressed public key")
+                if partial:
+                    return (x, y), expected_length
+                else:
+                    return x, y
             else:
-                return x, y
+                raise ValueError("Invalid public key prefix")
         else:
-            raise ValueError("Invalid public key prefix")
+            i = 0
+
+            nid, = struct.unpack("!H", public_key[i:i + 2])
+            i += 2
+            if nid != self.nid:
+                raise ValueError("Wrong curve")
+
+            xlen, = struct.unpack("!H", public_key[i:i + 2])
+            i += 2
+            if len(public_key) - i < xlen:
+                raise ValueError("Too short public key")
+            x = public_key[i:i + xlen]
+            i += xlen
+
+            ylen, = struct.unpack("!H", public_key[i:i + 2])
+            i += 2
+            if len(public_key) - i < ylen:
+                raise ValueError("Too short public key")
+            y = public_key[i:i + ylen]
+            i += ylen
+
+            if partial:
+                return (x, y), i
+            else:
+                if i < len(public_key):
+                    raise ValueError("Too long public key")
+                return x, y
 
 
     def new_private_key(self):
@@ -183,7 +217,10 @@ class EllipticCurve:
 
         # Encrypt
         ciphertext, iv = self._aes.encrypt(data, k_enc, algo=algo)
-        ciphertext = iv + self.private_to_public(private_key) + ciphertext
+        ephem_public_key = self.private_to_public(private_key)
+        ephem_public_key = self._decode_public_key(ephem_public_key)
+        ephem_public_key = self._encode_public_key(*ephem_public_key, raw=False)
+        ciphertext = iv + ephem_public_key + ciphertext
 
         # Add MAC tag
         if callable(mac):
@@ -233,7 +270,7 @@ class EllipticCurve:
             raise ValueError("Ciphertext is too small to contain IV")
         iv, ciphertext = ciphertext[:16], ciphertext[16:]
 
-        public_key, pos = self._decode_public_key(ciphertext, partial=True)
+        public_key, pos = self._decode_public_key(ciphertext, partial=True, raw=False)
         ciphertext = ciphertext[pos:]
 
         # Derive key
