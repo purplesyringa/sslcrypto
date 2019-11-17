@@ -7,7 +7,7 @@
 
 **sslcrypto** is a fast and simple library for AES, ECIES and ECDSA for Python.
 
-License: MIT.
+License: MIT + BSD-2 for ripemd implementation (see `_ripemd.py`).
 
 
 ## Why?
