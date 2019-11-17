@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="sslcrypto",
-    version="1.10",
+    version="1.11",
     description="ECIES, AES and RSA OpenSSL-based implementation with fallback",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
