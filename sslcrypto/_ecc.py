@@ -17,16 +17,23 @@ else:
 
 
 class ECC:
-    CURVES = (
-        "secp112r1", "secp112r2",
-        "secp128r1", "secp128r2",
-        "secp160k1", "secp160r1", "secp160r2",
-        "secp192k1", "prime192v1",
-        "secp224k1", "secp224r1",
-        "secp256k1", "prime256v1",
-        "secp384r1",
-        "secp521r1"
-    )
+    CURVES = {
+        "secp112r1": 704,
+        "secp112r2": 705,
+        "secp128r1": 706,
+        "secp128r2": 707,
+        "secp160k1": 708,
+        "secp160r1": 709,
+        "secp160r2": 710,
+        "secp192k1": 711,
+        "prime192v1": 409,
+        "secp224k1": 712,
+        "secp224r1": 713,
+        "secp256k1": 714,
+        "prime256v1": 415,
+        "secp384r1": 715,
+        "secp521r1": 716
+    }
 
     def __init__(self, backend, aes):
         self._backend = backend
@@ -34,16 +41,16 @@ class ECC:
 
 
     def get_curve(self, name):
-        if name not in self.CURVES or not self._backend.is_supported(name):
+        if name not in self.CURVES:
             raise ValueError("Unknown curve {}".format(name))
-        return EllipticCurve(self._backend, self._aes, name)
+        nid = self.CURVES[name]
+        return EllipticCurve(self._backend(nid), self._aes)
 
 
 class EllipticCurve:
-    def __init__(self, backend, aes, name):
-        self._backend = backend.EllipticCurveBackend(name)
+    def __init__(self, backend, aes):
+        self._backend = backend
         self._aes = aes
-        self.name = name
 
 
     def _encode_public_key(self, x, y, is_compressed=True):
