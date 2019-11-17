@@ -225,64 +225,45 @@ class ECCBackend:
 
         def sign(self, subject, raw_private_key, recoverable, is_compressed, entropy):
             z = self._subject_to_int(subject)
-
             private_key = bytes_to_int(raw_private_key)
+            k = bytes_to_int(entropy)
 
-            if entropy is None:
-                # Generate k deterministically from data
-                def generate_k():
-                    h = hashlib.sha512()
-                    h.update(subject)
-                    h.update(raw_private_key)
-                    h.update(b"\x00")
-                    h.update(str(time.time()).encode())
-                    k = bytes_to_int(h.digest()) % self.n
-                    while True:
-                        yield k
-                        k += 1
+            # Fix k length to prevent Minerva. Increasing multiplier by a
+            # multiple of order doesn't break anything. This fix was ported
+            # from python-ecdsa
+            ks = k + self.n
+            kt = ks + self.n
+            ks_len = len(bin(ks).replace("0b", "")) // 8
+            kt_len = len(bin(kt).replace("0b", "")) // 8
+            if ks_len == kt_len:
+                k = kt
             else:
-                # Use static k
-                def generate_k():
-                    yield bytes_to_int(entropy)
-                    raise ValueError("Invalid k")
+                k = ks
+            px, py = self.jacobian.fast_multiply(self.g, k, secret=True)
 
-            for k in generate_k():
-                # Fix k length to prevent Minerva. Increasing multiplier by a
-                # multiple of order doesn't break anything. This fix was ported
-                # from python-ecdsa
-                ks = k + self.n
-                kt = ks + self.n
-                ks_len = len(bin(ks).replace("0b", "")) // 8
-                kt_len = len(bin(kt).replace("0b", "")) // 8
-                if ks_len == kt_len:
-                    k = kt
+            r = px % self.n
+            if r == 0:
+                # Invalid k
+                raise ValueError("Invalid k")
+
+            s = (inverse(k, self.n) * (z + (private_key * r))) % self.n
+            if s == 0:
+                # Invalid k
+                raise ValueError("Invalid k")
+
+            rs_buf = self._int_to_bytes(r) + self._int_to_bytes(s)
+
+            if recoverable:
+                recid = py % 2
+                recid += 2 * int(px // self.n)
+                if is_compressed:
+                    return bytes([31 + recid]) + rs_buf
                 else:
-                    k = ks
-                px, py = self.jacobian.fast_multiply(self.g, k, secret=True)
-
-                r = px % self.n
-                if r == 0:
-                    # Invalid k
-                    continue
-
-                s = (inverse(k, self.n) * (z + (private_key * r))) % self.n
-                if s == 0:
-                    # Invalid k
-                    continue
-
-                rs_buf = self._int_to_bytes(r) + self._int_to_bytes(s)
-
-                if recoverable:
-                    recid = py % 2
-                    recid += 2 * int(px // self.n)
-                    if is_compressed:
-                        return bytes([31 + recid]) + rs_buf
-                    else:
-                        if recid >= 4:
-                            raise ValueError("Too big recovery ID, use compressed address instead")
-                        return bytes([27 + recid]) + rs_buf
-                else:
-                    return rs_buf
+                    if recid >= 4:
+                        raise ValueError("Too big recovery ID, use compressed address instead")
+                    return bytes([27 + recid]) + rs_buf
+            else:
+                return rs_buf
 
 
         def recover(self, signature, subject):

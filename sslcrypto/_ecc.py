@@ -258,7 +258,16 @@ class EllipticCurve:
 
 
     def sign(self, data, private_key, hash="sha256", recoverable=False, is_compressed=True, entropy=None):
-        return self._backend.sign(self._digest(data, hash), private_key, recoverable, is_compressed, entropy)
+        data = self._digest(data, hash)
+        if not entropy:
+            v = b"\x01" * len(data)
+            k = b"\x00" * len(data)
+            k = hmac.new(k, v + b"\x00" + private_key + data, "sha256").digest()
+            v = hmac.new(k, v, "sha256").digest()
+            k = hmac.new(k, v + b"\x01" + private_key + data, "sha256").digest()
+            v = hmac.new(k, v, "sha256").digest()
+            entropy = hmac.new(k, v, "sha256").digest()
+        return self._backend.sign(data, private_key, recoverable, is_compressed, entropy=entropy)
 
 
     def recover(self, signature, data, hash="sha256"):

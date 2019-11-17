@@ -375,10 +375,8 @@ class ECCBackend:
 
             self.order = BN()
             self.p = BN()
-            cofactor = BN()
             lib.EC_GROUP_get_order(self.group, self.order.bn, None)
             lib.EC_GROUP_get_curve_GFp(self.group, self.p.bn, None, None, None)
-            lib.EC_GROUP_get_cofactor(self.group, cofactor.bn, None)
 
             self.public_key_length = (len(self.p) + 7) // 8
 
@@ -557,72 +555,50 @@ class ECCBackend:
 
         def sign(self, subject, private_key, recoverable, is_compressed, entropy):
             z = self._subject_to_bn(subject)
-
             private_key = BN(private_key)
+            k = BN(entropy)
 
-            if entropy is None:
-                # Generate k randomly. We abuse EC_KEY_generate_key behavior
-                # here: whilst k is not a real private key, it has the same
-                # domain
-                def generate_k():
-                    eckey = lib.EC_KEY_new_by_curve_name(self.nid)
-                    if not eckey:
-                        raise ValueError("Could not create EC_KEY")
-                    try:
-                        while True:
-                            if not lib.EC_KEY_generate_key(eckey):
-                                raise ValueError("Could not generate EC_KEY")
-                            yield BN(lib.EC_KEY_get0_private_key(eckey), link_only=True)
-                    finally:
-                        lib.EC_KEY_free(eckey)
-            else:
-                # Use given entropy
-                def generate_k():
-                    yield BN(entropy)
+            rp = lib.EC_POINT_new(self.group)
+            try:
+                # Fix Minerva
+                k1 = k + self.order
+                k2 = k1 + self.order
+                if len(k1) == len(k2):
+                    k = k2
+                else:
+                    k = k1
+                if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
+                    raise ValueError("Could not generate R")
+                # Convert to affine coordinates
+                rx = BN()
+                ry = BN()
+                if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
+                    raise ValueError("Failed to convert R to affine coordinates")
+                r = rx % self.order
+                if r == BN(0):
                     raise ValueError("Invalid k")
-
-            for k in generate_k():
-                rp = lib.EC_POINT_new(self.group)
-                try:
-                    # Fix Minerva
-                    k1 = k + self.order
-                    k2 = k1 + self.order
-                    if len(k1) == len(k2):
-                        k = k2
+                # Calculate s = k^-1 * (z + r * private_key) mod n
+                s = (k.inverse(self.order) * (z + r * private_key)) % self.order
+                if s == BN(0):
+                    raise ValueError("Invalid k")
+                r_buf = r.bytes(self.public_key_length)
+                s_buf = s.bytes(self.public_key_length)
+                if recoverable:
+                    # Generate recid
+                    recid = (int(ry % BN(2)))
+                    # The line below is highly unlikely to matter in case of
+                    # secp256k1 but might make sense for other curves
+                    recid += 2 * int(rx // self.order)
+                    if is_compressed:
+                        return bytes([31 + recid]) + r_buf + s_buf
                     else:
-                        k = k1
-                    if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
-                        raise ValueError("Could not generate R")
-                    # Convert to affine coordinates
-                    rx = BN()
-                    ry = BN()
-                    if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
-                        raise ValueError("Failed to convert R to affine coordinates")
-                    r = rx % self.order
-                    if r == BN(0):
-                        continue
-                    # Calculate s = k^-1 * (z + r * private_key) mod n
-                    s = (k.inverse(self.order) * (z + r * private_key)) % self.order
-                    if s == BN(0):
-                        continue
-                    r_buf = r.bytes(self.public_key_length)
-                    s_buf = s.bytes(self.public_key_length)
-                    if recoverable:
-                        # Generate recid
-                        recid = (int(ry % BN(2)))
-                        # The line below is highly unlikely to matter in case of
-                        # secp256k1 but might make sense for other curves
-                        recid += 2 * int(rx // self.order)
-                        if is_compressed:
-                            return bytes([31 + recid]) + r_buf + s_buf
-                        else:
-                            if recid >= 4:
-                                raise ValueError("Too big recovery ID, use compressed address instead")
-                            return bytes([27 + recid]) + r_buf + s_buf
-                    else:
-                        return r_buf + s_buf
-                finally:
-                    lib.EC_POINT_free(rp)
+                        if recid >= 4:
+                            raise ValueError("Too big recovery ID, use compressed address instead")
+                        return bytes([27 + recid]) + r_buf + s_buf
+                else:
+                    return r_buf + s_buf
+            finally:
+                lib.EC_POINT_free(rp)
 
 
         def recover(self, signature, subject):
