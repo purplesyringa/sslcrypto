@@ -10,7 +10,7 @@ def discover_paths():
     if "win" in sys.platform:
         # Windows
         openssl_paths = [
-            os.path.abspath("libeay32.dll")
+            "libeay32.dll"
         ]
     elif "darwin" in sys.platform:
         # Mac OS
@@ -27,14 +27,14 @@ def discover_paths():
                 "libcrypto.1.0.0.dylib",
                 "libcrypto.0.9.8.dylib"
             ]
-            openssl_paths += [os.path.abspath(name) for name in names]
+            openssl_paths += names
             openssl_paths += [
                 os.path.join(os.environ["RESOURCEPATH"], "..", "Frameworks", name)
                 for name in names
             ]
     else:
         # Linux, BSD and such
-        names = [
+        openssl_paths = [
             "libcrypto.so",
             "libssl.so",
             "libcrypto.so.1.1.0",
@@ -48,7 +48,6 @@ def discover_paths():
             "libcrypto.so.0.9.8",
             "libssl.so.0.9.8"
         ]
-        openssl_paths = [os.path.abspath(name) for name in names]
 
     if hasattr(sys, "_MEIPASS") and "darwin" not in sys.platform:
         # Bundled. Assume the same libraries in the same directory

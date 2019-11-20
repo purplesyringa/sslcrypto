@@ -10,6 +10,7 @@ jobs:
       max-parallel: 4
       matrix:
         python-version: [3.6, 3.7, 3.8]
+        openssl-version: [1.0.0, 1.1.1]
 
     steps:
     - uses: actions/checkout@v1
@@ -25,11 +26,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install .
 
-    - name: Test
+    - name: Install OpenSSL
+      if: matrix.openssl-version == '1.0.0'
       run: |
-        openssl version -a
+        sudo ln -sf /usr/lib/x86_64-linux-gnu/libcrypto.so.1.0.0 /usr/lib/x86_64-linux-gnu/libcrypto.so
+        sudo ldconfig -X
+        ls -la /usr/lib/x86_64-linux-gnu/libcrypto.so
         python -c "print(__import__('sslcrypto').ecc.get_backend())"
 
+    - name: Test
+      run: |
         pip install pytest coverage
         coverage run -m pytest test
         coverage report | tail -n 1 | tr -s " " | cut -d " " -f4 | head -c -2 >output/coverage.txt
