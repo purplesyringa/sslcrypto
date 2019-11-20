@@ -94,4 +94,8 @@ class AES:
         return data
 
 
+    def get_backend(self):
+        return "fallback"
+
+
 aes = AES()

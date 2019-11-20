@@ -1,5 +1,6 @@
 class RSA:
-    pass
+    def get_backend(self):
+        return "fallback"
 
 
 rsa = RSA()

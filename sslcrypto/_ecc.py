@@ -48,6 +48,10 @@ class ECC:
         return EllipticCurve(self._backend(nid), self._aes, nid)
 
 
+    def get_backend(self):
+        return self._backend.get_backend()
+
+
 class EllipticCurve:
     def __init__(self, backend, aes, nid):
         self._backend = backend

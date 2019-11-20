@@ -33,6 +33,14 @@ except AttributeError:
     pass
 
 
+try:
+    lib.OpenSSL_version.restype = ctypes.c_char_p
+    openssl_backend = lib.OpenSSL_version(0).decode()
+except AttributeError:
+    lib.SSLeay_version.restype = ctypes.c_char_p
+    openssl_backend = lib.SSLeay_version(0).decode()
+
+
 class AES:
     ALGOS = (
         "aes-128-cbc", "aes-192-cbc", "aes-256-cbc",
@@ -54,6 +62,10 @@ class AES:
             # size of the context buffer because we are unsure about padding and
             # pointer size
             self.ctx = ctypes.create_string_buffer(1024)
+
+
+    def get_backend(self):
+        return openssl_backend
 
 
     def __del__(self):
@@ -689,8 +701,14 @@ class EllipticCurveBackend:
         return ((private_key1 + private_key2) % self.order).bytes(self.public_key_length)
 
 
+    @classmethod
+    def get_backend(cls):
+        return openssl_backend
+
+
 class RSA:
-    pass
+    def get_backend(self):
+        return openssl_backend
 
 
 aes = AES()
