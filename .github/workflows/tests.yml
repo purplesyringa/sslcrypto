@@ -27,6 +27,9 @@ jobs:
 
     - name: Test
       run: |
+        openssl version -a
+        python -c "print(__import__('sslcrypto').ecc.get_backend())"
+
         pip install pytest coverage
         coverage run -m pytest test
         coverage report | tail -n 1 | tr -s " " | cut -d " " -f4 | head -c -2 >output/coverage.txt
