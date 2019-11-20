@@ -65,8 +65,9 @@ def discover_paths():
 
 def discover_library():
     for path in discover_paths():
-        try:
-            return ctypes.CDLL(path)
-        except OSError:
-            pass
+        if path:
+            try:
+                return ctypes.CDLL(path)
+            except OSError:
+                pass
     raise OSError("OpenSSL is unavailable")
