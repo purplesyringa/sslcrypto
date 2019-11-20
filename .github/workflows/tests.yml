@@ -7,10 +7,10 @@ jobs:
 
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 4
+      max-parallel: 16
       matrix:
         python-version: [3.6, 3.7, 3.8]
-        openssl-version: [1.0.0, 1.1.1]
+        openssl-version: [0.9.8, 1.0.0, 1.0.1, 1.0.2, 1.1.0, 1.1.1]
 
     steps:
     - uses: actions/checkout@v1
@@ -26,12 +26,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install .
 
-    - name: Install OpenSSL
-      if: matrix.openssl-version == '1.0.0'
+    - name: Download & install OpenSSL ${{ matrix.openssl-version }}
+      if: matrix.openssl-version != '1.1.1'
       run: |
-        sudo ln -sf /usr/lib/x86_64-linux-gnu/libcrypto.so.1.0.0 /usr/lib/x86_64-linux-gnu/libcrypto.so
+        wget https://www.openssl.org/source/openssl-${{ matrix.openssl-version }}.tar.gz
+        mkdir openssl
+        tar -xzf openssl-${{ matrix.openssl-version }}.tar.gz
+        cd openssl-${{ matrix.openssl-version }}
+        if [ "${{ matrix.openssl-version }}" == "0.9.8" ]; then
+          ./config shared no-asm
+        else
+          ./config shared
+        fi
+        make depend
+        make all
+        sudo ln -sf "$(readlink -f libcrypto.so)" /usr/lib/x86_64-linux-gnu/libcrypto.so
+        sudo ln -sf "$(readlink -f libssl.so)" /usr/lib/x86_64-linux-gnu/libssl.so
         sudo ldconfig -X
-        ls -la /usr/lib/x86_64-linux-gnu/libcrypto.so
+        cd ..
         python -c "print(__import__('sslcrypto').ecc.get_backend())"
 
     - name: Test
