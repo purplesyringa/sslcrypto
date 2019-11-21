@@ -12,29 +12,33 @@ def discover_paths():
         openssl_paths = [
             "libeay32.dll"
         ]
+        if hasattr(sys, "_MEIPASS"):
+            openssl_paths += [os.path.join(sys._MEIPASS, path) for path in openssl_paths]
+        openssl_paths.append(ctypes.util.find_library("libeay32"))
     elif "darwin" in sys.platform:
         # Mac OS
-        openssl_paths = [
-            os.path.abspath("libcrypto.dylib"),
+        names = [
+            "libcrypto.dylib",
+            "libcrypto.1.1.0.dylib",
+            "libcrypto.1.0.2.dylib",
+            "libcrypto.1.0.1.dylib",
+            "libcrypto.1.0.0.dylib",
+            "libcrypto.0.9.8.dylib"
+        ]
+        openssl_paths = [os.path.abspath(path) for path in names]
+        openssl_paths += names
+        openssl_paths += [
             "/usr/local/opt/openssl/lib/libcrypto.dylib"
         ]
         if hasattr(sys, "_MEIPASS") and "RESOURCEPATH" in os.environ:
-            names = [
-                "libcrypto.dylib",
-                "libcrypto.1.1.0.dylib",
-                "libcrypto.1.0.2.dylib",
-                "libcrypto.1.0.1.dylib",
-                "libcrypto.1.0.0.dylib",
-                "libcrypto.0.9.8.dylib"
-            ]
-            openssl_paths += names
             openssl_paths += [
                 os.path.join(os.environ["RESOURCEPATH"], "..", "Frameworks", name)
                 for name in names
             ]
+        openssl_paths.append(ctypes.util.find_library("ssl"))
     else:
         # Linux, BSD and such
-        openssl_paths = [
+        names = [
             "libcrypto.so",
             "libssl.so",
             "libcrypto.so.1.1.0",
@@ -48,15 +52,10 @@ def discover_paths():
             "libcrypto.so.0.9.8",
             "libssl.so.0.9.8"
         ]
-
-    if hasattr(sys, "_MEIPASS") and "darwin" not in sys.platform:
-        # Bundled. Assume the same libraries in the same directory
-        # pylint: disable=no-member,protected-access
-        openssl_paths += [os.path.join(sys._MEIPASS, path) for path in openssl_paths]
-
-    if "win" in sys.platform:
-        openssl_paths.append(ctypes.util.find_library("libeay32"))
-    else:
+        openssl_paths = [os.path.abspath(path) for path in names]
+        openssl_paths += names
+        if hasattr(sys, "_MEIPASS"):
+            openssl_paths += [os.path.join(sys._MEIPASS, path) for path in names]
         openssl_paths.append(ctypes.util.find_library("ssl"))
 
     return openssl_paths
