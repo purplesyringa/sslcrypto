@@ -1,11 +1,12 @@
 import os
 import pyaes
+from .._aes import AES
 
 
 __all__ = ["aes"]
 
-class AES:
-    def _parse_algo_name(self, algo):
+class AESBackend:
+    def _get_algo_cipher_type(self, algo):
         if not algo.startswith("aes-") or algo.count("-") != 2:
             raise ValueError("Unknown cipher algorithm {}".format(algo))
         key_length, cipher_type = algo[4:].split("-")
@@ -13,22 +14,23 @@ class AES:
             raise ValueError("Unknown cipher algorithm {}".format(algo))
         if cipher_type not in ("cbc", "ctr", "cfb", "ofb"):
             raise ValueError("Unknown cipher algorithm {}".format(algo))
-        return int(key_length) // 8, cipher_type
+        return cipher_type
 
 
-    def get_algo_key_length(self, algo):
-        return self._parse_algo_name(algo)[0]
+    def is_algo_supported(self, algo):
+        try:
+            self._get_algo_cipher_type(algo)
+            return True
+        except ValueError:
+            return False
 
 
-    def new_key(self, algo="aes-256-cbc"):
-        key_length, _ = self._parse_algo_name(algo)
-        return os.urandom(key_length)
+    def random(self, length):
+        return os.urandom(length)
 
 
     def encrypt(self, data, key, algo="aes-256-cbc"):
-        key_length, cipher_type = self._parse_algo_name(algo)
-        if len(key) != key_length:
-            raise ValueError("Expected key to be {} bytes, got {} bytes".format(key_length, len(key)))
+        cipher_type = self._get_algo_cipher_type(algo)
 
         # Generate random IV
         iv = os.urandom(16)
@@ -62,9 +64,7 @@ class AES:
 
 
     def decrypt(self, ciphertext, iv, key, algo="aes-256-cbc"):
-        key_length, cipher_type = self._parse_algo_name(algo)
-        if len(key) != key_length:
-            raise ValueError("Expected key to be {} bytes, got {} bytes".format(key_length, len(key)))
+        cipher_type = self._get_algo_cipher_type(algo)
 
         if cipher_type == "cbc":
             cipher = pyaes.AESModeOfOperationCBC(key, iv=iv)
@@ -98,4 +98,4 @@ class AES:
         return "fallback"
 
 
-aes = AES()
+aes = AES(AESBackend())

@@ -2,6 +2,7 @@ import ctypes
 import os
 import hmac
 from ._ecc import ECC
+from ._aes import AES
 from . import library
 
 
@@ -41,7 +42,7 @@ except AttributeError:
     openssl_backend = lib.SSLeay_version(0).decode()
 
 
-class AES:
+class AESBackend:
     ALGOS = (
         "aes-128-cbc", "aes-192-cbc", "aes-256-cbc",
         "aes-128-ctr", "aes-192-ctr", "aes-256-ctr",
@@ -82,26 +83,18 @@ class AES:
         return cipher
 
 
-    def get_algo_key_length(self, algo):
-        # Initialize context
-        if not self.is_supported_ctx_new:
-            lib.EVP_CIPHER_CTX_init(self.ctx)
+    def is_algo_supported(self, algo):
         try:
-            # Get key length
-            lib.EVP_EncryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
-            return lib.EVP_CIPHER_CTX_key_length(self.ctx)
-        finally:
-            if self.is_supported_ctx_reset:
-                lib.EVP_CIPHER_CTX_reset(self.ctx)
-            else:
-                lib.EVP_CIPHER_CTX_cleanup(self.ctx)
+            self._get_cipher(algo)
+            return True
+        except ValueError:
+            return False
 
 
-    def new_key(self, algo="aes-256-cbc"):
-        key_length = self.get_algo_key_length(algo)
-        key = ctypes.create_string_buffer(key_length)
-        lib.RAND_bytes(key, key_length)
-        return bytes(key)
+    def random(self, length):
+        entropy = ctypes.create_string_buffer(length)
+        lib.RAND_bytes(entropy, length)
+        return bytes(entropy)
 
 
     def encrypt(self, data, key, algo="aes-256-cbc"):
@@ -111,20 +104,15 @@ class AES:
         try:
             lib.EVP_EncryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
 
-            # Make sure key length is correct
-            key_length = lib.EVP_CIPHER_CTX_key_length(self.ctx)
-            if len(key) != key_length:
-                raise ValueError("Expected key to be {} bytes, got {} bytes".format(key_length, len(key)))
-
             # Generate random IV
-            iv_length = lib.EVP_CIPHER_CTX_iv_length(self.ctx)
+            iv_length = 16
             iv = os.urandom(iv_length)
 
             # Set key and IV
             lib.EVP_EncryptInit_ex(self.ctx, None, None, key, iv)
 
             # Actually encrypt
-            block_size = lib.EVP_CIPHER_CTX_block_size(self.ctx)
+            block_size = 16
             output = ctypes.create_string_buffer((len(data) // block_size + 1) * block_size)
             output_len = ctypes.c_int()
 
@@ -152,25 +140,10 @@ class AES:
         try:
             lib.EVP_DecryptInit_ex(self.ctx, self._get_cipher(algo), None, None, None)
 
-            # Make sure key length is correct
-            key_length = lib.EVP_CIPHER_CTX_key_length(self.ctx)
-            if len(key) != key_length:
-                raise ValueError("Expected key to be {} bytes, got {} bytes".format(key_length, len(key)))
-
             # Make sure IV length is correct
-            iv_length = lib.EVP_CIPHER_CTX_iv_length(self.ctx)
+            iv_length = 16
             if len(iv) != iv_length:
                 raise ValueError("Expected IV to be {} bytes, got {} bytes".format(iv_length, len(iv)))
-
-            # Make sure ciphertext length is correct
-            block_size = lib.EVP_CIPHER_CTX_block_size(self.ctx)
-            if len(ciphertext) % block_size != 0:
-                raise ValueError(
-                    "Expected ciphertext to be a multiple of {} bytes, got {} bytes".format(
-                        block_size,
-                        len(ciphertext)
-                    )
-                )
 
             # Set key and IV
             lib.EVP_DecryptInit_ex(self.ctx, None, None, key, iv)
@@ -698,6 +671,6 @@ class RSA:
         return openssl_backend
 
 
-aes = AES()
+aes = AES(AESBackend())
 ecc = ECC(EllipticCurveBackend, aes)
 rsa = RSA()
