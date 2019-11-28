@@ -244,7 +244,7 @@ class BN:
         if not isinstance(other, BN):
             raise TypeError("Can only sum BN's, not BN and {}".format(other))
         result = BN()
-        if not lib.BN_add(result.bn, self.bn, other.bn, None):
+        if not lib.BN_add(result.bn, self.bn, other.bn):
             raise ValueError("Could not sum two BN's")
         return result
 
@@ -252,7 +252,7 @@ class BN:
         if not isinstance(other, BN):
             raise TypeError("Can only subtract BN's, not BN and {}".format(other))
         result = BN()
-        if not lib.BN_sub(result.bn, self.bn, other.bn, None):
+        if not lib.BN_sub(result.bn, self.bn, other.bn):
             raise ValueError("Could not subtract BN from BN")
         return result
 
@@ -323,8 +323,8 @@ class EllipticCurveBackend:
 
         self.order = BN()
         self.p = BN()
-        lib.EC_GROUP_get_order(self.group, self.order.bn, None)
-        lib.EC_GROUP_get_curve_GFp(self.group, self.p.bn, None, None, None)
+        lib.EC_GROUP_get_order(self.group, self.order.bn, BN.ctx)
+        lib.EC_GROUP_get_curve_GFp(self.group, self.p.bn, None, None, BN.ctx)
 
         self.public_key_length = (len(self.p) + 7) // 8
 
@@ -352,7 +352,7 @@ class EllipticCurveBackend:
         # EC_KEY_set_public_key_affine_coordinates is not supported by
         # OpenSSL 1.0.0 so we can't use it
         point = lib.EC_POINT_new(self.group)
-        if not lib.EC_POINT_set_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None):
+        if not lib.EC_POINT_set_affine_coordinates_GFp(self.group, point, x.bn, y.bn, BN.ctx):
             raise ValueError("Could not set public key affine coordinates")
         return point
 
@@ -378,7 +378,7 @@ class EllipticCurveBackend:
         # Convert to affine coordinates
         x = BN()
         y = BN()
-        if lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x.bn, y.bn, None) != 1:
+        if lib.EC_POINT_get_affine_coordinates_GFp(self.group, point, x.bn, y.bn, BN.ctx) != 1:
             raise ValueError("Failed to convert public key to affine coordinates")
         # Convert to binary
         if (len(x) + 7) // 8 > self.public_key_length:
@@ -393,7 +393,7 @@ class EllipticCurveBackend:
         if not point:
             raise ValueError("Could not create point")
         try:
-            if not lib.EC_POINT_oct2point(self.group, point, public_key, len(public_key), None):
+            if not lib.EC_POINT_oct2point(self.group, point, public_key, len(public_key), BN.ctx):
                 raise ValueError("Invalid compressed public key")
             return self._point_to_affine(point)
         finally:
@@ -520,7 +520,7 @@ class EllipticCurveBackend:
             # Convert to affine coordinates
             rx = BN()
             ry = BN()
-            if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
+            if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, BN.ctx) != 1:
                 raise ValueError("Failed to convert R to affine coordinates")
             r = rx % self.order
             if r == BN(0):
@@ -576,15 +576,15 @@ class EllipticCurveBackend:
             raise ValueError("Could not create R")
         try:
             init_buf = b"\x02" + rx.bytes(self.public_key_length)
-            if not lib.EC_POINT_oct2point(self.group, rp, init_buf, len(init_buf), None):
+            if not lib.EC_POINT_oct2point(self.group, rp, init_buf, len(init_buf), BN.ctx):
                 raise ValueError("Could not use Rx to initialize point")
             ry = BN()
-            if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, None, ry.bn, None) != 1:
+            if lib.EC_POINT_get_affine_coordinates_GFp(self.group, rp, None, ry.bn, BN.ctx) != 1:
                 raise ValueError("Failed to convert R to affine coordinates")
             if int(ry % BN(2)) != ry_mod:
                 # Fix Ry sign
                 ry = self.p - ry
-                if lib.EC_POINT_set_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, None) != 1:
+                if lib.EC_POINT_set_affine_coordinates_GFp(self.group, rp, rx.bn, ry.bn, BN.ctx) != 1:
                     raise ValueError("Failed to update R coordinates")
 
             # Recover public key
@@ -617,7 +617,7 @@ class EllipticCurveBackend:
             raise ValueError("Could not create public key point")
         try:
             init_buf = b"\x04" + public_key[0] + public_key[1]
-            if not lib.EC_POINT_oct2point(self.group, pub_p, init_buf, len(init_buf), None):
+            if not lib.EC_POINT_oct2point(self.group, pub_p, init_buf, len(init_buf), BN.ctx):
                 raise ValueError("Could initialize point")
 
             sinv = s.inverse(self.order)
