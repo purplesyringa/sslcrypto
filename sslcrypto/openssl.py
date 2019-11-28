@@ -241,40 +241,42 @@ class BN:
         return lib.BN_num_bits(self.bn)
 
 
+    class Context:
+        def __init__(self):
+            self.ctx = lib.BN_CTX_new()
+
+        def __enter__(self):
+            return self.ctx
+
+        def __exit__(self, *args):
+            lib.BN_CTX_free(self.ctx)
+
+
     def inverse(self, modulo):
-        ctx = lib.BN_CTX_new()
-        try:
+        with self.Context() as ctx:
             result = BN()
             if not lib.BN_mod_inverse(result.bn, self.bn, modulo.bn, ctx):
                 raise ValueError("Could not compute inverse")
             return result
-        finally:
-            lib.BN_CTX_free(ctx)
 
 
     def __floordiv__(self, other):
         if not isinstance(other, BN):
             raise TypeError("Can only divide BN by BN, not {}".format(other))
-        ctx = lib.BN_CTX_new()
-        try:
+        with self.Context() as ctx:
             result = BN()
             if not lib.BN_div(result.bn, None, self.bn, other.bn, ctx):
                 raise ZeroDivisionError("Division by zero")
             return result
-        finally:
-            lib.BN_CTX_free(ctx)
 
     def __mod__(self, other):
         if not isinstance(other, BN):
             raise TypeError("Can only divide BN by BN, not {}".format(other))
-        ctx = lib.BN_CTX_new()
-        try:
+        with self.Context() as ctx:
             result = BN()
             if not lib.BN_div(None, result.bn, self.bn, other.bn, ctx):
                 raise ZeroDivisionError("Division by zero")
             return result
-        finally:
-            lib.BN_CTX_free(ctx)
 
     def __add__(self, other):
         if not isinstance(other, BN):
@@ -295,14 +297,11 @@ class BN:
     def __mul__(self, other):
         if not isinstance(other, BN):
             raise TypeError("Can only multiply BN by BN, not {}".format(other))
-        ctx = lib.BN_CTX_new()
-        try:
+        with self.Context() as ctx:
             result = BN()
             if not lib.BN_mul(result.bn, self.bn, other.bn, ctx):
                 raise ValueError("Could not multiply two BN's")
             return result
-        finally:
-            lib.BN_CTX_free(ctx)
 
     def __neg__(self):
         return BN(0) - self
