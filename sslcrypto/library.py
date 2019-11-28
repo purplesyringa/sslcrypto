@@ -9,9 +9,10 @@ def discover_paths():
     # Search local files first
     if "win" in sys.platform:
         # Windows
-        openssl_paths = [
+        names = [
             "libeay32.dll"
         ]
+        openssl_paths = [os.path.abspath(path) for path in names]
         if hasattr(sys, "_MEIPASS"):
             openssl_paths += [os.path.join(sys._MEIPASS, path) for path in openssl_paths]
         openssl_paths.append(ctypes.util.find_library("libeay32"))
