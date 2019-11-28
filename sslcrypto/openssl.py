@@ -197,6 +197,9 @@ class AES:
 
 
 class BN:
+    ctx = lib.BN_CTX_new()
+
+
     def __init__(self, value=None, link_only=False):
         if link_only:
             self.bn = value
@@ -241,42 +244,28 @@ class BN:
         return lib.BN_num_bits(self.bn)
 
 
-    class Context:
-        def __init__(self):
-            self.ctx = lib.BN_CTX_new()
-
-        def __enter__(self):
-            return self.ctx
-
-        def __exit__(self, *args):
-            lib.BN_CTX_free(self.ctx)
-
-
     def inverse(self, modulo):
-        with self.Context() as ctx:
-            result = BN()
-            if not lib.BN_mod_inverse(result.bn, self.bn, modulo.bn, ctx):
-                raise ValueError("Could not compute inverse")
-            return result
+        result = BN()
+        if not lib.BN_mod_inverse(result.bn, self.bn, modulo.bn, BN.ctx):
+            raise ValueError("Could not compute inverse")
+        return result
 
 
     def __floordiv__(self, other):
         if not isinstance(other, BN):
             raise TypeError("Can only divide BN by BN, not {}".format(other))
-        with self.Context() as ctx:
-            result = BN()
-            if not lib.BN_div(result.bn, None, self.bn, other.bn, ctx):
-                raise ZeroDivisionError("Division by zero")
-            return result
+        result = BN()
+        if not lib.BN_div(result.bn, None, self.bn, other.bn, BN.ctx):
+            raise ZeroDivisionError("Division by zero")
+        return result
 
     def __mod__(self, other):
         if not isinstance(other, BN):
             raise TypeError("Can only divide BN by BN, not {}".format(other))
-        with self.Context() as ctx:
-            result = BN()
-            if not lib.BN_div(None, result.bn, self.bn, other.bn, ctx):
-                raise ZeroDivisionError("Division by zero")
-            return result
+        result = BN()
+        if not lib.BN_div(None, result.bn, self.bn, other.bn, BN.ctx):
+            raise ZeroDivisionError("Division by zero")
+        return result
 
     def __add__(self, other):
         if not isinstance(other, BN):
@@ -297,11 +286,10 @@ class BN:
     def __mul__(self, other):
         if not isinstance(other, BN):
             raise TypeError("Can only multiply BN by BN, not {}".format(other))
-        with self.Context() as ctx:
-            result = BN()
-            if not lib.BN_mul(result.bn, self.bn, other.bn, ctx):
-                raise ValueError("Could not multiply two BN's")
-            return result
+        result = BN()
+        if not lib.BN_mul(result.bn, self.bn, other.bn, BN.ctx):
+            raise ValueError("Could not multiply two BN's")
+        return result
 
     def __neg__(self):
         return BN(0) - self
@@ -458,9 +446,8 @@ class EllipticCurveBackend:
             # Derive public key
             point = lib.EC_POINT_new(self.group)
             try:
-                with BN.Context() as ctx:
-                    if not lib.EC_POINT_mul(self.group, point, private_key.bn, None, None, None, ctx):
-                        raise ValueError("Failed to derive public key")
+                if not lib.EC_POINT_mul(self.group, point, private_key.bn, None, None, BN.ctx):
+                    raise ValueError("Failed to derive public key")
                 return self._point_to_affine(point)
             finally:
                 lib.EC_POINT_free(point)
@@ -555,9 +542,8 @@ class EllipticCurveBackend:
                 k = k2
             else:
                 k = k1
-            with BN.Context() as ctx:
-                if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None, ctx):
-                    raise ValueError("Could not generate R")
+            if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, BN.ctx):
+                raise ValueError("Could not generate R")
             # Convert to affine coordinates
             rx = BN()
             ry = BN()
@@ -633,9 +619,8 @@ class EllipticCurveBackend:
             if not result:
                 raise ValueError("Could not create point")
             try:
-                with BN.Context() as ctx:
-                    if not lib.EC_POINT_mul(self.group, result, u1.bn, rp, u2.bn, None, ctx):
-                        raise ValueError("Could not recover public key")
+                if not lib.EC_POINT_mul(self.group, result, u1.bn, rp, u2.bn, BN.ctx):
+                    raise ValueError("Could not recover public key")
                 return self._point_to_affine(result)
             finally:
                 lib.EC_POINT_free(result)
@@ -671,9 +656,8 @@ class EllipticCurveBackend:
             if not result:
                 raise ValueError("Could not create point")
             try:
-                with BN.Context() as ctx:
-                    if not lib.EC_POINT_mul(self.group, result, u1.bn, pub_p, u2.bn, None, ctx):
-                        raise ValueError("Could not recover public key")
+                if not lib.EC_POINT_mul(self.group, result, u1.bn, pub_p, u2.bn, BN.ctx):
+                    raise ValueError("Could not recover public key")
                 if BN(self._point_to_affine(result)[0]) % self.order != r:
                     raise ValueError("Invalid signature")
                 return True
