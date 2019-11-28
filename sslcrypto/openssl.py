@@ -458,8 +458,9 @@ class EllipticCurveBackend:
             # Derive public key
             point = lib.EC_POINT_new(self.group)
             try:
-                if not lib.EC_POINT_mul(self.group, point, private_key.bn, None, None, None):
-                    raise ValueError("Failed to derive public key")
+                with BN.Context() as ctx:
+                    if not lib.EC_POINT_mul(self.group, point, private_key.bn, None, None, None, ctx):
+                        raise ValueError("Failed to derive public key")
                 return self._point_to_affine(point)
             finally:
                 lib.EC_POINT_free(point)
@@ -554,8 +555,9 @@ class EllipticCurveBackend:
                 k = k2
             else:
                 k = k1
-            if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None):
-                raise ValueError("Could not generate R")
+            with BN.Context() as ctx:
+                if not lib.EC_POINT_mul(self.group, rp, k.bn, None, None, None, ctx):
+                    raise ValueError("Could not generate R")
             # Convert to affine coordinates
             rx = BN()
             ry = BN()
@@ -631,8 +633,9 @@ class EllipticCurveBackend:
             if not result:
                 raise ValueError("Could not create point")
             try:
-                if not lib.EC_POINT_mul(self.group, result, u1.bn, rp, u2.bn, None):
-                    raise ValueError("Could not recover public key")
+                with BN.Context() as ctx:
+                    if not lib.EC_POINT_mul(self.group, result, u1.bn, rp, u2.bn, None, ctx):
+                        raise ValueError("Could not recover public key")
                 return self._point_to_affine(result)
             finally:
                 lib.EC_POINT_free(result)
@@ -668,8 +671,9 @@ class EllipticCurveBackend:
             if not result:
                 raise ValueError("Could not create point")
             try:
-                if not lib.EC_POINT_mul(self.group, result, u1.bn, pub_p, u2.bn, None):
-                    raise ValueError("Could not recover public key")
+                with BN.Context() as ctx:
+                    if not lib.EC_POINT_mul(self.group, result, u1.bn, pub_p, u2.bn, None, ctx):
+                        raise ValueError("Could not recover public key")
                 if BN(self._point_to_affine(result)[0]) % self.order != r:
                     raise ValueError("Invalid signature")
                 return True
