@@ -18,10 +18,10 @@ def test(aes, key_length, cipher_type):
     key2 = aes.new_key(algo=algo)
     data = b"Hello, world!"
 
-    assert aes.decrypt(*aes.encrypt(data, key1, algo=algo), key1, algo=algo) == data
+    assert aes.decrypt(*aes.encrypt(data, key1, algo=algo), key=key1, algo=algo) == data
 
     # We have to use if because AES might accidentally managed to decrypt data
     # with a wrong key
     with pytest.raises(ValueError):
-        if aes.decrypt(*aes.encrypt(data, key1, algo=algo), key2, algo=algo) != data:
+        if aes.decrypt(*aes.encrypt(data, key1, algo=algo), key=key2, algo=algo) != data:
             raise ValueError("Got wrong data")
