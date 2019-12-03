@@ -70,3 +70,19 @@ def discover_library():
             except OSError:
                 pass
     raise OSError("OpenSSL is unavailable")
+
+
+lib = discover_library()
+
+# Initialize internal state
+try:
+    lib.OPENSSL_add_all_algorithms_conf()
+except AttributeError:
+    pass
+
+try:
+    lib.OpenSSL_version.restype = ctypes.c_char_p
+    openssl_backend = lib.OpenSSL_version(0).decode()
+except AttributeError:
+    lib.SSLeay_version.restype = ctypes.c_char_p
+    openssl_backend = lib.SSLeay_version(0).decode()

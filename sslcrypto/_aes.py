@@ -1,3 +1,5 @@
+# pylint: disable=import-outside-toplevel
+
 class AES:
     def __init__(self, backend):
         self._backend = backend
@@ -45,4 +47,3 @@ class AES:
 
     def get_backend(self):
         return self._backend.get_backend()
-
