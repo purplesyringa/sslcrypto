@@ -12,6 +12,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         "pyaes==1.6.1",
-        "base58check==1.0.2"
+        "base58==1.0.3"
     ]
 )

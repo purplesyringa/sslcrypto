@@ -1,7 +1,7 @@
 import hashlib
 import struct
 import hmac
-import base58check
+import base58
 
 
 try:
@@ -149,35 +149,20 @@ class EllipticCurve:
 
 
     def private_to_wif(self, private_key):
-        h = hashlib.sha256(b"\x80" + private_key).digest()
-        h = hashlib.sha256(h).digest()
-        checksum = h[:4]
-        return base58check.b58encode(b"\x80" + private_key + checksum)
+        return base58.b58encode_check(b"\x80" + private_key)
 
 
     def wif_to_private(self, wif):
-        dec = base58check.b58decode(wif)
+        dec = base58.b58decode_check(wif)
         if dec[0] != 0x80:
             raise ValueError("Invalid network (expected mainnet)")
-        private_key = dec[1:-4]
-        checksum = dec[-4:]
-        # Compare checksum
-        h = hashlib.sha256(b"\x80" + private_key).digest()
-        h = hashlib.sha256(h).digest()
-        if h[:4] != checksum:
-            raise ValueError("Invalid checksum")
-        return private_key
+        return dec[1:]
 
 
     def public_to_address(self, public_key):
-        # Calculate hash160
         h = hashlib.sha256(public_key).digest()
         hash160 = ripemd160(h).digest()
-        # Add checksum
-        h = hashlib.sha256(b"\x00" + hash160).digest()
-        h = hashlib.sha256(h).digest()
-        checksum = h[:4]
-        return base58check.b58encode(b"\x00" + hash160 + checksum)
+        return base58.b58encode_check(b"\x00" + hash160)
 
 
     def private_to_address(self, private_key, is_compressed=True):
