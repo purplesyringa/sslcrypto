@@ -1,14 +1,10 @@
 [MASTER]
-disable=missing-docstring,no-else-return,too-few-public-methods,redefined-builtin,no-self-use
+disable=missing-docstring,no-else-return,redefined-builtin,no-self-use
 
 const-rgx=[a-z_][a-z0-9_]{2,30}$|[A-Z_][A-Z0-9_]{2,30}$
 variable-rgx=[a-z_][a-z0-9_]{,30}$
 argument-rgx=[a-z_][a-z0-9_]{,30}$
 attr-rgx=[a-z_][a-z0-9_]{,30}$
-
-
-[FORMAT]
-max-line-length=120
 
 
 [DESIGN]

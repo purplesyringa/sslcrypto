@@ -1,3 +1,5 @@
+# pylint: disable=too-few-public-methods
+
 from .library import openssl_backend
 
 
