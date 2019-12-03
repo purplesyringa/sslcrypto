@@ -4,6 +4,9 @@ import ctypes
 import ctypes.util
 
 
+# Disable false-positive _MEIPASS
+# pylint: disable=no-member,protected-access
+
 # Discover OpenSSL library
 def discover_paths():
     # Search local files first

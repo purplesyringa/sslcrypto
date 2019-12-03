@@ -1,5 +1,6 @@
 import ctypes
 from .._aes import AES
+from ..fallback.aes import aes as fallback_aes
 from .library import lib, openssl_backend
 
 
@@ -137,4 +138,4 @@ class AESBackend:
                 lib.EVP_CIPHER_CTX_cleanup(self.ctx)
 
 
-aes = AES(AESBackend())
+aes = AES(AESBackend(), fallback_aes)

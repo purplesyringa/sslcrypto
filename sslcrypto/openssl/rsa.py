@@ -1,4 +1,4 @@
-from .library import lib, openssl_backend
+from .library import openssl_backend
 
 
 class RSA:
