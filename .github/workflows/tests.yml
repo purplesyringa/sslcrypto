@@ -9,22 +9,11 @@ jobs:
     strategy:
       max-parallel: 16
       matrix:
-        python-version: [3.4.10, 3.5, 3.6, 3.7, 3.8]
+        python-version: [3.4, 3.5, 3.6, 3.7, 3.8]
         openssl-version: [0.9.8, 1.0.0, 1.0.1, 1.0.2, 1.1.0, 1.1.1]
 
     steps:
     - uses: actions/checkout@v1
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install
-      run: |
-        mkdir output
-        python -m pip install --upgrade pip
-        pip install .
 
     - name: Download & install OpenSSL ${{ matrix.openssl-version }}
       if: matrix.openssl-version != '1.1.1'
@@ -44,7 +33,34 @@ jobs:
         sudo ln -sf "$(readlink -f libssl.so)" /usr/lib/x86_64-linux-gnu/libssl.so
         sudo ldconfig -X
         cd ..
-        python -c "print(__import__('sslcrypto').ecc.get_backend())"
+
+    - name: Download & install Python ${{ matrix.python-version }}
+      if: matrix.python-version == '3.4'
+      run: |
+        sudo apt-get install build-essential checkinstall
+        sudo apt-get install libreadline-gplv2-dev libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev
+        sudo apt-get install libssl-dev
+        wget https://www.python.org/ftp/python/3.4.4/Python-3.4.4.tgz
+        tar xzf Python-3.4.4.tgz
+        cd Python-3.4.4
+        sudo ./configure --prefix=/opt/python3.4 --with-ensurepip=install
+        sudo make altinstall
+        cd ..
+        sudo ln -fs /opt/python3.4/python3.4 $(which python)
+        which python
+        python --version
+
+    - name: Set up Python ${{ matrix.python-version }}
+      if: matrix.python-version != '3.4'
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install
+      run: |
+        mkdir output
+        python -m pip install --upgrade pip
+        pip install .
 
     - name: Test
       run: |
