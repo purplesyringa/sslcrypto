@@ -1,6 +1,7 @@
 import pytest
 import sslcrypto
 import sslcrypto.fallback
+from .conf import parallelize
 
 
 testcases = [sslcrypto.fallback.aes]
@@ -25,3 +26,23 @@ def test(aes, key_length, cipher_type):
     with pytest.raises(ValueError):
         if aes.decrypt(*aes.encrypt(data, key1, algo=algo), key=key2, algo=algo) != data:
             raise ValueError("Got wrong data")
+
+
+
+def test_thread_safety():
+    aes = sslcrypto.aes
+
+    @parallelize(8)
+    def run():
+        for _ in range(100):
+            key1 = aes.new_key()
+            key2 = aes.new_key()
+            data = b"Hello, world!"
+
+            assert aes.decrypt(*aes.encrypt(data, key1), key=key1) == data
+            try:
+                aes.decrypt(*aes.encrypt(data, key1), key=key2)
+            except ValueError:
+                pass
+
+    run()
