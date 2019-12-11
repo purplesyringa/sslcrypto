@@ -203,6 +203,14 @@ curve.child_derive(private_key, 123)
 ```
 
 
+### Misc
+
+```python
+import sslcrypto
+print(sslcrypto.ecc.get_backend())  # Either "fallback" or OpenSSL info
+```
+
+
 ## Running tests
 
 sslcrypto uses pytest framework. Install it with pip and run `python3 -m pytest
