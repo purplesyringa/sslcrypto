@@ -34,20 +34,13 @@ jobs:
         sudo ldconfig -X
         cd ..
 
-    - name: Download & install Python ${{ matrix.python-version }}
+    - name: Install Python ${{ matrix.python-version }}
       if: matrix.python-version == '3.4'
       run: |
-        sudo apt-get install build-essential checkinstall
-        sudo apt-get install libreadline-gplv2-dev libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev
-        sudo apt-get install libssl-dev
-        wget https://www.python.org/ftp/python/3.4.4/Python-3.4.4.tgz
-        tar xzf Python-3.4.4.tgz
-        cd Python-3.4.4
-        sudo ./configure --prefix=/opt/python3.4 --with-ensurepip=install
-        sudo make altinstall
-        cd ..
-        sudo ln -fs /opt/python3.4/python3.4 $(which python)
-        which python
+        sudo add-apt-repository ppa:deadsnakes/ppa
+        sudo apt-get update
+        sudo apt-get install python3.4-dev
+        sudo ln -sf /usr/bin/python3.4 /usr/bin/python
         python --version
 
     - name: Set up Python ${{ matrix.python-version }}
@@ -56,21 +49,27 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Configure Python ${{ matrix.python-version }}
+      if: matrix.python-version != '3.4'
+      run: |
+        sudo ln -sf $(which python) /usr/bin/python
+
     - name: Install
       run: |
         mkdir output
-        python -m pip install --upgrade pip
-        pip install .
+        sudo python -m pip install setuptools
+        sudo python -m pip install --upgrade pip
+        sudo python -m pip install .
 
     - name: Test
       run: |
-        pip install pytest coverage
+        sudo python -m pip install pytest coverage
         coverage run -m pytest test
         coverage report | tail -n 1 | tr -s " " | cut -d " " -f4 | head -c -2 >output/coverage.txt
 
     - name: Lint
       run: |
-        pip install pylint shields
+        sudo python -m pip install pylint
         pylint --output-format=parseable --exit-zero sslcrypto >output/lint-out.txt
 
     - name: Upload results
