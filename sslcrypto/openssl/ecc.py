@@ -406,7 +406,7 @@ class EllipticCurveBackend:
             s_buf = s.bytes(self.public_key_length)
             if recoverable:
                 # Generate recid
-                recid = (int(ry % BN(2)))
+                recid = (int(ry % BN(2))) ^ (s * BN(2) >= self.order)
                 # The line below is highly unlikely to matter in case of
                 # secp256k1 but might make sense for other curves
                 recid += 2 * int(rx // self.order)
@@ -445,7 +445,7 @@ class EllipticCurveBackend:
         rx = r + BN(recid // 2) * self.order
         if rx >= self.p:
             raise ValueError("Rx is out of bounds")
-        ry_mod = recid % 2
+        ry_mod = (recid % 2) ^ (s * BN(2) >= self.order)
         rp = lib.EC_POINT_new(self.group)
         if not rp:
             raise ValueError("Could not create R")

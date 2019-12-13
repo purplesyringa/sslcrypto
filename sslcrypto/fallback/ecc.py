@@ -262,7 +262,7 @@ class EllipticCurveBackend:
         rs_buf = self._int_to_bytes(r) + self._int_to_bytes(s)
 
         if recoverable:
-            recid = py % 2
+            recid = (py % 2) ^ (s * 2 >= self.n)
             recid += 2 * int(px // self.n)
             if is_compressed:
                 return bytes([31 + recid]) + rs_buf
@@ -297,7 +297,7 @@ class EllipticCurveBackend:
         rx = r + (recid // 2) * self.n
         if rx >= self.p:
             raise ValueError("Rx is out of bounds")
-        ry_mod = recid % 2
+        ry_mod = (recid % 2) ^ (s * 2 >= self.n)
 
         # Almost copied from decompress_point
         ry_square = (pow(rx, 3, self.p) + self.a * rx + self.b) % self.p
