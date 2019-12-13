@@ -2,6 +2,7 @@ import os
 import pytest
 import sslcrypto
 import sslcrypto.fallback
+from sslcrypto.fallback._util import bytes_to_int, int_to_bytes
 from collections import defaultdict
 
 
@@ -41,9 +42,10 @@ for name in curve_tests:
 
         def test():
             for msg, d, qx, qy, k, r, s in curve_tests[name]:
+                inv_s = int_to_bytes(curve._backend.n - bytes_to_int(s), len(s))
                 signature = curve.sign(msg, d, hash=None, entropy=k)
                 assert signature[:len(r)] == r
-                assert signature[len(r):] == s
+                assert signature[len(r):] in (s, inv_s)
                 assert curve.verify(signature, msg, b"\x04" + qx + qy, hash=None)
 
         globals()["test_{}".format(name)] = test
@@ -55,9 +57,10 @@ for name in curve_tests:
 
             def test():
                 for msg, d, qx, qy, k, r, s in curve_tests[name]:
+                    inv_s = int_to_bytes(curve._backend.n - bytes_to_int(s), len(s))
                     signature = native_curve.sign(msg, d, hash=None, entropy=k)
                     assert signature[:len(r)] == r
-                    assert signature[len(r):] == s
+                    assert signature[len(r):] in (s, inv_s)
                     assert native_curve.verify(signature, msg, b"\x04" + qx + qy, hash=None)
 
             globals()["test_native_{}".format(name)] = test
