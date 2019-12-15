@@ -19,7 +19,9 @@ but pure-Python code is also available and is heavily optimized.
 (e.g. when using secp256k1). They don't include ECIES implementation and some
 useful ECDSA features and are specialized on a single curve. If that's enough
 for you and libsecp256k1 bindings are available for all OSes you need to
-support, use those libraries.
+support, use those libraries. [Coincurve](https://github.com/ofek/coincurve),
+in particular, ships pre-compiled packages for all major OSes and building from
+source does not require an existing libsecp256k1 installation.
 
 **N.B.** While there are other mature cryptography libraries, they are too heavy
 for simple stuff and require OpenSSL that is not available by default on Windows
