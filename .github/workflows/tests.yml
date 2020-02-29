@@ -9,7 +9,7 @@ jobs:
     strategy:
       max-parallel: 16
       matrix:
-        python-version: [3.4, 3.5, 3.6, 3.7, 3.8]
+        python-version: [3.5, 3.6, 3.7, 3.8]
         openssl-version: [0.9.8, 1.0.0, 1.0.1, 1.0.2, 1.1.0, 1.1.1]
 
     steps:
@@ -34,42 +34,27 @@ jobs:
         sudo ldconfig -X
         cd ..
 
-    - name: Install Python ${{ matrix.python-version }}
-      if: matrix.python-version == '3.4'
-      run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa
-        sudo apt-get update
-        sudo apt-get install python3.4-dev
-        sudo ln -sf /usr/bin/python3.4 /usr/bin/python
-        python --version
-
     - name: Set up Python ${{ matrix.python-version }}
-      if: matrix.python-version != '3.4'
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Configure Python ${{ matrix.python-version }}
-      if: matrix.python-version != '3.4'
-      run: |
-        sudo ln -sf $(which python) /usr/bin/python
-
     - name: Install
       run: |
         mkdir output
-        sudo python -m pip install setuptools
-        sudo python -m pip install --upgrade pip
-        sudo python -m pip install .
+        sudo python3 -m pip install setuptools
+        sudo python3 -m pip install --upgrade pip
+        sudo python3 -m pip install .
 
     - name: Test
       run: |
-        sudo python -m pip install pytest coverage
+        sudo python3 -m pip install pytest coverage
         coverage run -m pytest test
         coverage report | tail -n 1 | tr -s " " | cut -d " " -f4 | head -c -2 >output/coverage.txt
 
     - name: Lint
       run: |
-        sudo python -m pip install pylint
+        sudo python3 -m pip install pylint
         pylint --output-format=parseable --exit-zero sslcrypto >output/lint-out.txt
 
     - name: Upload results
@@ -78,7 +63,7 @@ jobs:
         git config --local user.name "GitHub Action"
         git checkout gh-action
 
-        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | python -c "print(round(float(input()) * 10))")
+        quality=$(cat output/lint-out.txt | grep "Your code has been rated at" | cut -d " " -f7 | cut -d/ -f1 | python3 -c "print(round(float(input()) * 10))")
         curl https://img.shields.io/badge/quality-$quality%25-brightgreen.svg >quality.svg
 
         coverage=$(cat output/coverage.txt)
