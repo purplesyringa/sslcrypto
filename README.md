@@ -114,7 +114,7 @@ data = b"Hello, world!"
 ciphertext = curve.encrypt(data, public_key, algo="aes-256-ofb")
 
 # Decrypt
-assert curve.decrypt(ciphertext, private_key) == data
+assert curve.decrypt(ciphertext, private_key, algo="aes-256-ofb") == data
 ```
 
 
