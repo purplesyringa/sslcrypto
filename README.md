@@ -212,6 +212,13 @@ import sslcrypto
 print(sslcrypto.ecc.get_backend())  # Either "fallback" or OpenSSL info
 ```
 
+You can override OpenSSL path discovery:
+
+```python
+from sslcrypto.openssl import discovery
+discovery.discover = lambda: ["openssl_lib.dll"]
+```
+
 
 ## Running tests
 
