@@ -8,6 +8,9 @@ def test_aes():
     @parallelize(16)
     def run():
         for _ in range(500):
+            aes.new_key()
+
+        for _ in range(500):
             key1 = aes.new_key()
             key2 = aes.new_key()
             data = b"Hello, world!"
@@ -25,6 +28,10 @@ def test_ecc_basic():
     @parallelize(16)
     def run():
         priv = b"8\"\x7f\xdf\np\xd1s\x809\xc4\xd0\xd2\xd4Z\x85La{\x08\xb3\xc9[\x9c+ji\xfeA,\x14+"
+
+        # Generators
+        for _ in range(500):
+            curve.new_private_key()
 
         # Basic conversions
         for _ in range(500):
