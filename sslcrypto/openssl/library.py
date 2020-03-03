@@ -65,6 +65,8 @@ def discover_paths():
     lst = user_discover()
     if isinstance(lst, str):
         lst = [lst]
+    elif not lst:
+        lst = []
     return lst + openssl_paths
 
 
