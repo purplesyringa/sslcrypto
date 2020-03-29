@@ -84,6 +84,10 @@ def test_static(ecc):
     data = b"Hello, world!"
     entropy = b"Just some entropy"
 
+    # Compression detection
+    assert curve.is_compressed(curve.private_to_wif(priv1)) == False
+    assert curve.is_compressed(curve.private_to_wif(priv1, is_compressed=True)) == True
+
     # Basic conversions
     pub1 = curve.private_to_public(priv1)
     pub2 = curve.private_to_public(priv2)
@@ -93,6 +97,11 @@ def test_static(ecc):
     # WIF
     assert curve.private_to_wif(priv1) == b"5JF1U8yr5wZbrBCgTVtswjMR7iqC8KQ4oh4EPqeKRmnSompJVMQ"
     assert curve.wif_to_private(b"5JpCC7mMHxZ8Lw9TwUymMzdcfWeLVi8r8Tyyz5ic6G12iqAXr6E") == priv2
+
+    # Compressed WIF
+    assert curve.wif_to_private(curve.private_to_wif(priv1, is_compressed=True)) == priv1
+    assert curve.private_to_wif(priv1, is_compressed=True) == b"Ky6q4nDueoptp42Z9xXyrZw7Sfdi7JCoo5oG7ohiLLfatyKqaUAT"
+    assert curve.wif_to_private(b"L1dJQ4rkZrCoQyzMuUVYofNcQyqo3iZdqx6WWwpdtDD8bL7kro2s") == priv2
 
     # Addresses
     assert curve.public_to_address(pub1) == curve.private_to_address(priv1) == b"1553rYBLgCVA6vGYcN7AipdAeWGp9tkAw4"
