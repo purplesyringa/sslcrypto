@@ -25,8 +25,10 @@ for name in sslcrypto.ecc.CURVES:
 def test(curve):
     priv1 = curve.new_private_key()
     pub1 = curve.private_to_public(priv1)
+    pub1_compressed = curve.private_to_public(priv1 + b"\x01")
     priv2 = curve.new_private_key()
     pub2 = curve.private_to_public(priv2)
+    pub2_compressed = curve.private_to_public(priv2 + b"\x01")
     priv3 = curve.new_private_key()
     pub3 = curve.private_to_public(priv3)
     data = b"Hello, world!"
@@ -56,23 +58,25 @@ def test(curve):
     # ECDSA
     for hash in ("sha256", "sha1"):
         signature = curve.sign(data, priv1, hash=hash)
-        rec_signature = curve.sign(data, priv1, hash=hash, recoverable=True)
+        signature_compressed = curve.sign(data, priv1 + b"\x01", hash=hash)
+        rec_signature = curve.sign(data, priv1 + b"\x01", hash=hash, recoverable=True)
 
-        assert curve.recover(rec_signature, data, hash=hash) == pub1
+        assert curve.recover(rec_signature, data, hash=hash) == pub1_compressed
         assert curve.verify(signature, data, pub1, hash=hash)
-        assert curve.verify(rec_signature, data, pub1, hash=hash)
+        assert curve.verify(signature_compressed, data, pub1_compressed, hash=hash)
+        assert curve.verify(rec_signature, data, pub1_compressed, hash=hash)
 
         # Unrecoverable signature
         with pytest.raises(ValueError):
             curve.recover(signature, data, hash=hash)
         # Wrong data
-        curve.recover(rec_signature, data2, hash=hash) != pub1
+        curve.recover(rec_signature, data2, hash=hash) != pub1_compressed
         # Wrong public key
         with pytest.raises(ValueError):
-            curve.verify(signature, data, pub2, hash=hash)
+            curve.verify(signature, data, pub2_compressed, hash=hash)
         # Wrong data
         with pytest.raises(ValueError):
-            curve.verify(signature, data2, pub1, hash=hash)
+            curve.verify(signature, data2, pub1_compressed, hash=hash)
 
 
 @pytest.mark.parametrize("ecc", eccs, ids=ecc_ids)
@@ -87,39 +91,42 @@ def test_static(ecc):
     # Basic conversions
     pub1 = curve.private_to_public(priv1)
     pub2 = curve.private_to_public(priv2)
-    assert pub1 == b"\x03\xce\x1c\xb7\x17\xce1\x99\x0cOj\xfe\xc0D\x1c+n\xa1\xe7\x88\xbe\xfa5\xad\xaf\xad\x1c\x05R\xc8\xf3\xa1\x90"
-    assert pub2 == b"\x03n\xb8g\x18\xc3\xa8o\x85\x92\xaa\xcax\x10c\x0c[\xc1x\xc0\x94\xa5!A\xd6\x12\x8e\x01\xee\xf52\x7fb"
+    pub1_compressed = curve.private_to_public(priv1 + b"\x01")
+    pub2_compressed = curve.private_to_public(priv2 + b"\x01")
+    assert pub1 == b"\x04\xce\x1c\xb7\x17\xce1\x99\x0cOj\xfe\xc0D\x1c+n\xa1\xe7\x88\xbe\xfa5\xad\xaf\xad\x1c\x05R\xc8\xf3\xa1\x90\xb5\x004\xcc\xb9\x1chG\xb0\x17S\xe6\xaf\xed\xca\x9f\x8c\x07\xa3%\xa4%uB\x005\xb9\xc4\x97\x89\x81\xe3"
+    assert pub2 == b"\x04n\xb8g\x18\xc3\xa8o\x85\x92\xaa\xcax\x10c\x0c[\xc1x\xc0\x94\xa5!A\xd6\x12\x8e\x01\xee\xf52\x7fb\xf3\xb7{\xf8,\xc4n\x10#$9\xbe\xa6\xba\x13=\xa0eZ\x99\x99\xc4dgdlN\xbe\xf4\x05\x18\xad"
+    assert pub1_compressed == b"\x03\xce\x1c\xb7\x17\xce1\x99\x0cOj\xfe\xc0D\x1c+n\xa1\xe7\x88\xbe\xfa5\xad\xaf\xad\x1c\x05R\xc8\xf3\xa1\x90"
+    assert pub2_compressed == b"\x03n\xb8g\x18\xc3\xa8o\x85\x92\xaa\xcax\x10c\x0c[\xc1x\xc0\x94\xa5!A\xd6\x12\x8e\x01\xee\xf52\x7fb"
 
     # WIF
     assert curve.private_to_wif(priv1) == b"5JF1U8yr5wZbrBCgTVtswjMR7iqC8KQ4oh4EPqeKRmnSompJVMQ"
     assert curve.wif_to_private(b"5JpCC7mMHxZ8Lw9TwUymMzdcfWeLVi8r8Tyyz5ic6G12iqAXr6E") == priv2
 
     # Addresses
-    assert curve.public_to_address(pub1) == curve.private_to_address(priv1) == b"1553rYBLgCVA6vGYcN7AipdAeWGp9tkAw4"
-    assert curve.private_to_address(priv1, is_compressed=False) == b"1G1ZCdmQUuhnn8zYrx2Q2hXMB5NjsbZ3k7"
-    assert curve.public_to_address(pub2) == curve.private_to_address(priv2) == b"1JCQGE4mVQ2DnEZEdVJJnAkMdEPjqVDNtc"
-    assert curve.private_to_address(priv2, is_compressed=False) == b"1Dj1pAV83cDLZPxYhKfnbDMigKVxML6KPj"
+    assert curve.public_to_address(pub1) == curve.private_to_address(priv1) == b"1G1ZCdmQUuhnn8zYrx2Q2hXMB5NjsbZ3k7"
+    assert curve.public_to_address(pub1_compressed) == curve.private_to_address(priv1 + b"\x01") == b"1553rYBLgCVA6vGYcN7AipdAeWGp9tkAw4"
+    assert curve.public_to_address(pub2) == curve.private_to_address(priv2) == b"1Dj1pAV83cDLZPxYhKfnbDMigKVxML6KPj"
+    assert curve.public_to_address(pub2_compressed) == curve.private_to_address(priv2 + b"\x01") == b"1JCQGE4mVQ2DnEZEdVJJnAkMdEPjqVDNtc"
 
     # ECDH
     assert curve.derive(priv1, pub2) == curve.derive(priv2, pub1) == b"\xb2\xab\x1d\xb4\x9dBX\x81\xc6\xf2\x15]+\xc0\x85\xc7\xe9\x018G\xe1\xda\x18\xf4\xac\xaa\x00q\x1d\xc6+\x04"
 
     # ECDSA
     signature = b"\x1f\x14\xc4\x95z7-\xaf\x91T&\xa7\xd0\xfc\x9b\x8b\x08\x15g\xa1\x82[\x08\x91o\xe1.\x8d\xb6=\x1a\x88\xe07\x01\xf39\xe5j~\xd5#\xd2\xbc\x88 \x16Ts\xac\x9dI\x0f.\xe8aCT8H\\\xb7pb-"
+    assert curve.sign(data, priv1 + b"\x01", recoverable=True, entropy=entropy) == signature
+    assert curve.sign(data, priv1 + b"\x01", entropy=entropy) == signature[1:]
+    assert curve.verify(signature, data, pub1_compressed)
+    assert curve.verify(signature[1:], data, pub1_compressed)
+    assert curve.recover(signature, data) == pub1_compressed
+
+    signature = b"\x1b\x14\xc4\x95z7-\xaf\x91T&\xa7\xd0\xfc\x9b\x8b\x08\x15g\xa1\x82[\x08\x91o\xe1.\x8d\xb6=\x1a\x88\xe07\x01\xf39\xe5j~\xd5#\xd2\xbc\x88 \x16Ts\xac\x9dI\x0f.\xe8aCT8H\\\xb7pb-"
     assert curve.sign(data, priv1, recoverable=True, entropy=entropy) == signature
     assert curve.sign(data, priv1, entropy=entropy) == signature[1:]
+    assert curve.verify(signature, data, pub1_compressed)
+    assert curve.verify(signature[1:], data, pub1_compressed)
     assert curve.verify(signature, data, pub1)
     assert curve.verify(signature[1:], data, pub1)
     assert curve.recover(signature, data) == pub1
-
-    signature = b"\x1b\x14\xc4\x95z7-\xaf\x91T&\xa7\xd0\xfc\x9b\x8b\x08\x15g\xa1\x82[\x08\x91o\xe1.\x8d\xb6=\x1a\x88\xe07\x01\xf39\xe5j~\xd5#\xd2\xbc\x88 \x16Ts\xac\x9dI\x0f.\xe8aCT8H\\\xb7pb-"
-    pub1_uncompressed = curve.private_to_public(priv1, is_compressed=False)
-    assert curve.sign(data, priv1, recoverable=True, is_compressed=False, entropy=entropy) == signature
-    assert curve.sign(data, priv1, is_compressed=False, entropy=entropy) == signature[1:]
-    assert curve.verify(signature, data, pub1)
-    assert curve.verify(signature[1:], data, pub1)
-    assert curve.verify(signature, data, pub1_uncompressed)
-    assert curve.verify(signature[1:], data, pub1_uncompressed)
-    assert curve.recover(signature, data) == pub1_uncompressed
 
     # BIP32
     assert curve.derive_child(priv1, 0) == b"*-\x0b\xcd\x14|l-\x8d\x07\x15N\xdbX\xaa\x92\x12\n\x8cU\x8d2-\x00\x13\xa2:\x11UFV*"
@@ -128,8 +135,8 @@ def test_static(ecc):
     # Additional weird cases
     data = b"F\x97\x045\xa5a\x15%J\xf7\x1d\x04\xf1\xb1\x85\xf2\xfet\xb4\xcb\x02\xab\x0b\xa2?P\x07\xd6\x13\x86x\xdb"
     privatekey = b"\x8b\xec\xd2F\xc6:A{\xf0|\x11\xadv\xcc\xaa#\xb0U\xf5\xdb\x0f1=3\xe3P\xfeW\x95\xf3\x17\xb3"
-    publickey = curve.private_to_public(privatekey, is_compressed=False)
+    publickey = curve.private_to_public(privatekey)
     signature = b"\x1bQ\x97h6\xaeg\xcb\xd7\xfc\xdfI\x9f\xe3\x11\x88i\xbd\x87\xe2=\xe35!\x0esX\x15\xaa\x8c\x1a\xe3\xa2\x04p~\x92\x9e\x1cD\xf6N/\xb9u\xca\xa2\xb9\x04v\xba'\xe5\xbd\xed\xb3#\xbd5\xed\xc79c\xa7\xac"
-    assert curve.sign(data, privatekey, recoverable=True, is_compressed=False, hash=None) == signature
+    assert curve.sign(data, privatekey, recoverable=True, hash=None) == signature
     assert curve.verify(signature, data, publickey, hash=None)
     assert curve.recover(signature, data, hash=None) == publickey
