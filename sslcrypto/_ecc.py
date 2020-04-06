@@ -296,6 +296,10 @@ class EllipticCurve:
             return x, y
 
 
+    def decode_public_key(self, public_key):
+        return self._decode_public_key(public_key)
+
+
     def new_private_key(self, is_compressed=False):
         return self._backend.new_private_key() + (b"\x01" if is_compressed else b"")
 
