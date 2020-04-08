@@ -200,6 +200,14 @@ from sslcrypto.openssl import discovery
 discovery.discover = lambda: ["openssl_lib.dll"]
 ```
 
+If you want to go low-level, you can get curve parameters:
+
+```python
+import sslcrypto
+curve = sslcrypto.ecc.get_curve("secp256k1")
+assert curve.params["n"] == 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+```
+
 
 ## Running tests
 

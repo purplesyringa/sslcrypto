@@ -140,3 +140,6 @@ def test_static(ecc):
     assert curve.sign(data, privatekey, recoverable=True, hash=None) == signature
     assert curve.verify(signature, data, publickey, hash=None)
     assert curve.recover(signature, data, hash=None) == publickey
+
+    # Parameters
+    assert curve.params["n"] == 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141

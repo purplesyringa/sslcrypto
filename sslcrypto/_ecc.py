@@ -198,7 +198,8 @@ class ECC:
         if name not in self.CURVES:
             raise ValueError("Unknown curve {}".format(name))
         nid, p, n, a, b, g = self.CURVES[name]
-        return EllipticCurve(self._backend(p, n, a, b, g), self._aes, nid)
+        params = {"p": p, "n": n, "a": a, "b": b, "g": g}
+        return EllipticCurve(self._backend, params, self._aes, nid)
 
 
     def get_backend(self):
@@ -206,8 +207,9 @@ class ECC:
 
 
 class EllipticCurve:
-    def __init__(self, backend, aes, nid):
-        self._backend = backend
+    def __init__(self, backend_factory, params, aes, nid):
+        self._backend = backend_factory(**params)
+        self.params = params
         self._aes = aes
         self.nid = nid
 
