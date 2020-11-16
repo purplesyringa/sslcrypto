@@ -87,11 +87,13 @@ The following curves are supported:
 
 - secp112r1, secp112r2
 - secp128r1, secp128r2
-- secp160k1, secp160r1, secp160r2
-- secp192k1, prime192v1
-- secp224k1, secp224r1
-- secp256k1, prime256v1
-- secp384r1
+- secp160k1, secp160r1, secp160r2, brainpoolP160r1
+- secp192k1, prime192v1, brainpoolP192r1
+- secp224k1, secp224r1, brainpoolP224r1
+- secp256k1, prime256v1, brainpoolP256r1
+- brainpoolP320r1
+- secp384r1, brainpoolP384r1
+- brainpoolP512r1
 - secp521r1
 
 Please tell me if you want to add any other curves.
@@ -100,7 +102,7 @@ Please tell me if you want to add any other curves.
 import sslcrypto
 
 # Create curve object
-curve = sslcrypto.ecc.get_curve("secp256k1")
+curve = sslcrypto.ecc.get_curve("brainpoolP256r1")
 
 # Generate private key, both compressed and uncompressed keys are supported
 private_key = curve.new_private_key(is_compressed=True)
@@ -128,7 +130,7 @@ assert curve.decrypt(ciphertext, private_key, algo="aes-256-ofb") == data
 import sslcrypto
 
 # Create curve object
-curve = sslcrypto.ecc.get_curve("secp256k1")
+curve = sslcrypto.ecc.get_curve("brainpoolP256r1")
 
 # Generate private key
 private_key = curve.new_private_key()
@@ -150,7 +152,7 @@ Additionally, you can create recoverable signatures:
 import sslcrypto
 
 # Create curve object
-curve = sslcrypto.ecc.get_curve("secp256k1")
+curve = sslcrypto.ecc.get_curve("brainpoolP256r1")
 
 # Generate private key
 private_key = curve.new_private_key()
