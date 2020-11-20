@@ -58,6 +58,7 @@ jobs:
         pylint --output-format=parseable --exit-zero sslcrypto >output/lint-out.txt
 
     - name: Upload results
+      if: github.event_name == "push"
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
@@ -73,7 +74,7 @@ jobs:
         git commit -m "Update shields" || true
 
     - uses: ad-m/github-push-action@master
-      if: matrix.python-version == '3.7'
+      if: matrix.python-version == '3.7' && github.event_name == 'push'
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         branch: gh-action
